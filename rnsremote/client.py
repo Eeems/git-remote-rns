@@ -13,6 +13,7 @@ from . import protocol
 from .connection import (
     Link,
     get_reticulum,
+    set_reticulum,
     APP_NAME,
     configure_logging,
 )
@@ -85,7 +86,9 @@ def main():
     _ = parser.add_argument("url", help="Remote URL (rns::<hash>[/path])")
     args = parser.parse_args()
 
-    configure_logging(False, level=logging.WARNING)
+    verbose = bool(os.environ.get("VERBOSE", 0))
+    log_level = logging.WARNING if not verbose else logging.INFO
+    configure_logging(verbose, level=log_level)
     log = logging.getLogger(__name__)
 
     assert isinstance(args.url, str)  # pyright: ignore[reportAny] # nosec B101
@@ -100,7 +103,9 @@ def main():
     destination_hash = parts[0]
     repo_path = parts[1] if len(parts) > 1 else ""
 
+    config_path = os.environ.get("CONFIG_PATH", os.path.expanduser("~/.reticulum"))
     try:
+        set_reticulum(RNS.Reticulum(config_path, log_level))
         _run_helper(log, destination_hash, repo_path)
 
     except Exception:
