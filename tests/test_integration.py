@@ -353,7 +353,7 @@ class TestLink:
         assert result is False
         assert not link._connected.is_set()
 
-        link.connected()
+        link._connected.set()
         result = link.wait_for_connect(timeout=0.1)
         assert result is True
 

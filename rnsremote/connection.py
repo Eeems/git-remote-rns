@@ -15,15 +15,11 @@ __all__ = [
     "save_identity",
     "load_identity",
     "configure_logging",
-    "get_reticulum",
     "APP_NAME",
 ]
 
 
 APP_NAME = protocol.APP_NAME
-
-_reticulum = None
-_reticulum_lock = threading.Lock()
 
 
 def configure_logging(verbose: bool = False, level: int | None = None):
@@ -38,23 +34,6 @@ def configure_logging(verbose: bool = False, level: int | None = None):
     )
 
 
-def get_reticulum(config_path: str | None = None):
-    global _reticulum
-    if _reticulum is None:
-        with _reticulum_lock:
-            if _reticulum is None:
-                _reticulum = RNS.Reticulum(config_path)
-
-    return _reticulum
-
-
-def set_reticulum(reticulum: RNS.Reticulum):
-    global _reticulum
-    with _reticulum_lock:
-        assert _reticulum is None
-        _reticulum = reticulum
-
-
 class Link:
     def __init__(self, link: RNS.Link | None = None):
         self._link: RNS.Link | None = link
@@ -63,20 +42,19 @@ class Link:
 
     def on_link_established(self, link: RNS.Link):
         self._link = link
-        self.connected()
+        self._connected.set()
 
     def start(self, destination: RNS.Destination) -> None:
         if self._link is not None:
             return
 
-        link = RNS.Link(destination)
-        link.set_link_established_callback(self.on_link_established)  # pyright: ignore[reportUnknownMemberType]
+        _ = RNS.Link(
+            destination,
+            established_callback=self.on_link_established,
+        )
 
     def wait_for_connect(self, timeout: float = 30.0) -> bool:
         return self._connected.wait(timeout)
-
-    def connected(self):
-        self._connected.set()
 
     def send(self, data: bytes):
         if self._link is not None:
@@ -91,8 +69,7 @@ class Link:
             self._link = None
 
 
-def create_server_identity(config_path: str | None = None) -> RNS.Identity:
-    _ = get_reticulum(config_path)
+def create_server_identity() -> RNS.Identity:
     identity = RNS.Identity()
     return identity
 
@@ -100,10 +77,7 @@ def create_server_identity(config_path: str | None = None) -> RNS.Identity:
 def create_server_destination(
     identity: RNS.Identity,
     destination_hexhash: str | None = None,
-    config_path: str | None = None,
 ) -> RNS.Destination:
-    _ = get_reticulum(config_path)
-
     if destination_hexhash is None:
         hexhash = identity.hexhash
         if hexhash is None:

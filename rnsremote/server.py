@@ -69,11 +69,11 @@ def main(  # noqa: PLR0913,PLR0912,R0917,too-many-positional-arguments
         log.error("Not a valid repository: %s", repo_path)
         sys.exit(1)
 
+    _ = RNS.Reticulum(config_path, RNS.LOG_VERBOSE if verbose else RNS.LOG_WARNING)
     identity = _load_or_create_identity(
         log,
         identity_path,
         save_identity_path,
-        config_path,
     )
 
     if destination_hexhash is None:
@@ -81,9 +81,7 @@ def main(  # noqa: PLR0913,PLR0912,R0917,too-many-positional-arguments
         log.info("Using identity's hash as destination: %s", destination_hexhash)
 
     assert destination_hexhash is not None  # nosec B101
-    _serve_loop(
-        log, identity, destination_hexhash, repo_path, announce_interval, config_path
-    )
+    _serve_loop(log, identity, destination_hexhash, repo_path, announce_interval)
 
 
 def _parse_args():
@@ -117,7 +115,6 @@ def _load_or_create_identity(
     log: logging.Logger,
     identity_path: str | None,
     save_identity_path: str | None,
-    config_path: str | None,
 ):
     if identity_path:
         log.info("Loading identity from %s", identity_path)
@@ -125,7 +122,7 @@ def _load_or_create_identity(
 
     else:
         log.info("Creating new server identity...")
-        identity = create_server_identity(config_path)
+        identity = create_server_identity()
 
     if save_identity_path:
         log.info("Saving identity to %s", save_identity_path)
@@ -140,10 +137,9 @@ def _serve_loop(  # noqa: PLR0913,PLR0912,too-many-positional-arguments
     destination_hexhash: str,
     repo_path: str,
     announce_interval: int | None = None,
-    config_path: str | None = None,
 ):
     log.info("Creating server destination...")
-    destination = create_server_destination(identity, destination_hexhash, config_path)
+    destination = create_server_destination(identity, destination_hexhash)
 
     log.info("Server destination hash: %s", destination.hexhash)  # pyright: ignore[reportAny]
     log.info("Share this hash with clients to allow connections")

@@ -12,16 +12,12 @@ import RNS  # type: ignore[import-untyped]
 from . import protocol
 from .connection import (
     Link,
-    get_reticulum,
-    set_reticulum,
     APP_NAME,
     configure_logging,
 )
 
 GIT_DIR = os.environ.get("GIT_DIR", ".git")
 __all__ = [
-    "connect",
-    "connect_client",
     "configure_logging",
     "ClientLink",
     "main",
@@ -31,7 +27,10 @@ __all__ = [
 
 class ClientLink(Link):
     def __init__(
-        self, link: RNS.Link | None, destination_hexhash: str, repo_path: str = ""
+        self,
+        link: RNS.Link | None,
+        destination_hexhash: str,
+        repo_path: str = "",
     ):
         super().__init__(link)
         self.destination_hexhash: str = destination_hexhash
@@ -87,8 +86,7 @@ def main():
     args = parser.parse_args()
 
     verbose = bool(os.environ.get("VERBOSE", 0))
-    log_level = logging.WARNING if not verbose else logging.INFO
-    configure_logging(verbose, level=log_level)
+    configure_logging(verbose, level=logging.DEBUG if verbose else logging.WARNING)
     log = logging.getLogger(__name__)
 
     assert isinstance(args.url, str)  # pyright: ignore[reportAny] # nosec B101
@@ -105,7 +103,7 @@ def main():
 
     config_path = os.environ.get("CONFIG_PATH", os.path.expanduser("~/.reticulum"))
     try:
-        set_reticulum(RNS.Reticulum(config_path, log_level))
+        _ = RNS.Reticulum(config_path, RNS.LOG_VERBOSE if verbose else RNS.LOG_WARNING)
         _run_helper(log, destination_hash, repo_path)
 
     except Exception:
@@ -116,7 +114,7 @@ def main():
 
 def _run_helper(log: logging.Logger, destination_hash: str, repo_path: str = ""):
     log.debug("Connecting to %s...", destination_hash[:8])
-    git_link = connect(destination_hash, repo_path=repo_path, timeout=30)
+    git_link = _connect(destination_hash, repo_path, 30)
 
     if not git_link.wait_for_connect(timeout=30):
         log.error("Failed to connect to remote")
@@ -303,9 +301,8 @@ def _pipe_service_data(
         log.warning("forward_to_git thread still running after timeout")
 
 
-def connect(
+def _connect(
     destination_hexhash: str,
-    config_path: str | None = None,
     repo_path: str = "",
     timeout: float = 60.0,
 ):
@@ -340,7 +337,6 @@ def connect(
             f"Invalid destination hash format: {destination_hexhash[:8]}... - {e}"
         ) from e
 
-    _ = get_reticulum(config_path)
     log.debug("Looking for path to %s...", destination_hexhash[:8])
 
     if not RNS.Transport.has_path(destination_hash):  # pyright: ignore[reportUnknownMemberType]
@@ -377,6 +373,3 @@ def connect(
     client_link = ClientLink(None, destination_hexhash, repo_path)  # type: ignore[arg-type]
     client_link.start(destination)
     return client_link
-
-
-connect_client = connect
