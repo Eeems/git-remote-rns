@@ -681,13 +681,16 @@ class TestEndToEnd:
                     if not line:
                         print("rngit stdout closed")
                         break
+
                     print(f"SERVER: {line.rstrip()}")
                     match = re.search(r"Server destination hash:\s*([a-f0-9]+)", line)
                     if match:
                         dest_hash = match.group(1)
                         break
+
                     if "error" in line.lower():
                         assert False, f"Server error: {line}"
+
                 else:
                     print("Timeout waiting for rngit output")
                     break
