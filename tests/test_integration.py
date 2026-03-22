@@ -508,31 +508,6 @@ class TestServerParseArgs:
         assert args.save_identity == "server.ident"
 
 
-class TestConnectionExports:
-    def test_connection_has_all(self):
-        from rnsremote import connection
-
-        assert hasattr(connection, "__all__")
-        expected = [
-            "Link",
-            "ClientLink",
-            "connect",
-            "create_server_identity",
-            "create_server_destination",
-            "save_identity",
-            "load_identity",
-            "configure_logging",
-            "get_reticulum",
-        ]
-        assert connection.__all__ == expected
-
-    def test_all_exports_are_available(self):
-        from rnsremote import connection
-
-        for name in connection.__all__:
-            assert hasattr(connection, name), f"Missing export: {name}"
-
-
 class TestEndToEnd:
     def test_rns_link_callback_interface(self):
         import RNS

@@ -172,4 +172,5 @@ def parse_packet(data: bytes) -> Packet:
 
     if packet_type in packet_classes:
         return packet_classes[packet_type].deserialize(payload)
+
     return Packet.deserialize(data)
