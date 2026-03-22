@@ -24,7 +24,7 @@ from .connection import (
 )
 
 
-__all__ = ["serve_forever", "ServerLink"]
+__all__ = ["main", "ServerLink"]
 
 
 class ServerLink(Link):
@@ -33,7 +33,7 @@ class ServerLink(Link):
         self.repo_path: str = repo_path
 
 
-def serve_forever(  # noqa: PLR0913,PLR0912,R0917,too-many-positional-arguments
+def main(  # noqa: PLR0913,PLR0912,R0917,too-many-positional-arguments
     destination_hexhash: str | None = None,
     repo_path: str | None = None,
     config_path: str | None = None,

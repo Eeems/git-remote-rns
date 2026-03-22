@@ -2,8 +2,8 @@ import argparse
 import sys
 
 from . import __version__
-from .helper import run as client  # noqa: F401
-from .server import serve_forever as server  # noqa: F401
+from .client import main as client  # noqa: F401
+from .server import main as server  # noqa: F401
 
 
 def main():

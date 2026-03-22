@@ -6,14 +6,16 @@ from unittest.mock import (
     patch,
 )
 from rnsremote import (
-    helper,
     server,
     connection,
     protocol,
+    client,
 )
-from rnsremote.connection import (
+from rnsremote.connection import Link
+from rnsremote.client import (
     ClientLink,
-    Link,
+    pipe_git_service,
+    configure_logging,
 )
 
 
@@ -400,8 +402,8 @@ class TestPipeGitService:
         mock_git_link = MagicMock()
         mock_git_link.receive.return_value = None
 
-        with patch.object(helper, "_pipe_service_data"):
-            helper.pipe_git_service(mock_git_link, "git-upload-pack")
+        with patch.object(client, "_pipe_service_data"):
+            pipe_git_service(mock_git_link, "git-upload-pack")
 
         mock_popen.assert_called_once()
 
@@ -412,7 +414,7 @@ class TestPipeGitService:
         mock_git_link = MagicMock()
 
         with pytest.raises(SystemExit) as exc_info:
-            helper.pipe_git_service(mock_git_link, "git-upload-pack")
+            pipe_git_service(mock_git_link, "git-upload-pack")
 
         assert exc_info.value.code == 1
 
@@ -423,7 +425,7 @@ class TestPipeGitService:
         mock_git_link = MagicMock()
 
         with pytest.raises(SystemExit) as exc_info:
-            helper.pipe_git_service(mock_git_link, "git-upload-pack")
+            pipe_git_service(mock_git_link, "git-upload-pack")
 
         assert exc_info.value.code == 1
 
@@ -444,7 +446,7 @@ class TestConfigureLogging:
     def test_configure_logging_custom_level(self):
         import logging
 
-        helper.configure_logging(False, level=logging.WARNING)
+        configure_logging(False, level=logging.WARNING)
         assert logging.root.level == logging.WARNING
 
 
