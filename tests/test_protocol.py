@@ -13,8 +13,6 @@ from rnsremote.protocol import (
     PACKET_REF_LIST,
     PACKET_WANT,
     PACKET_HAVE,
-    PACKET_PACK,
-    PACKET_DONE,
     PACKET_ERROR,
 )
 

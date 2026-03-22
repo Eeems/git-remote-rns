@@ -4,9 +4,16 @@ import os
 import subprocess  # noqa: B404
 import sys
 import threading
+import traceback
 
-from . import client, protocol
-from .connection import configure_logging
+from . import (
+    client,
+    protocol,
+)
+from .connection import (
+    ClientLink,
+    configure_logging,
+)
 
 
 __all__ = ["run"]
@@ -17,13 +24,14 @@ GIT_DIR = os.environ.get("GIT_DIR", ".git")
 
 def run():
     parser = argparse.ArgumentParser(prog="git-remote-rns")
-    parser.add_argument("remote", help="Remote name (ignored)")
-    parser.add_argument("url", help="Remote URL (rns::<hash>[/path])")
+    _ = parser.add_argument("remote", help="Remote name (ignored)")
+    _ = parser.add_argument("url", help="Remote URL (rns::<hash>[/path])")
     args = parser.parse_args()
 
     configure_logging(False, level=logging.WARNING)
     log = logging.getLogger(__name__)
 
+    assert isinstance(args.url, str)  # pyright: ignore[reportAny] # nosec B101
     url = args.url
 
     if not url.startswith("rns::"):
@@ -37,12 +45,14 @@ def run():
 
     try:
         _run_helper(log, destination_hash, repo_path)
+
     except Exception:
         log.exception("Error")
+        traceback.print_exc()
         sys.exit(1)
 
 
-def _run_helper(log, destination_hash: str, repo_path: str = ""):
+def _run_helper(log: logging.Logger, destination_hash: str, repo_path: str = ""):
     log.debug("Connecting to %s...", destination_hash[:8])
     git_link = client.connect(destination_hash, repo_path=repo_path, timeout=30)
 
@@ -56,7 +66,7 @@ def _run_helper(log, destination_hash: str, repo_path: str = ""):
 
         if line == "":
             print()
-            sys.stdout.flush()
+            sys.stdout.flush()  # pyright: ignore[reportUnusedCallResult]
             break
 
         if args[0] == "capabilities":
@@ -77,7 +87,7 @@ def _run_helper(log, destination_hash: str, repo_path: str = ""):
 
             log.debug("Connecting to service: %s", service)
             print()
-            sys.stdout.flush()
+            _ = sys.stdout.flush()
 
             pipe_git_service(git_link, service)
             break
@@ -86,13 +96,13 @@ def _run_helper(log, destination_hash: str, repo_path: str = ""):
             print(f"error: Unknown command '{args[0]}'", file=sys.stderr)
             sys.exit(1)
 
-        sys.stdout.flush()
+        _ = sys.stdout.flush()
 
     git_link.close()
     log.debug("Connection closed")
 
 
-def pipe_git_service(git_link, service: str):
+def pipe_git_service(git_link: ClientLink, service: str):
     log = logging.getLogger(__name__)
     stdin_lock = threading.Lock()
 
@@ -107,6 +117,7 @@ def pipe_git_service(git_link, service: str):
     except FileNotFoundError:
         log.error("Service not found: %s. Is git installed?", service)
         sys.exit(1)
+
     except OSError as e:
         log.error("Failed to start %s: %s", service, e)
         sys.exit(1)
@@ -115,29 +126,48 @@ def pipe_git_service(git_link, service: str):
     _pipe_service_data(git_link, proc, stdin_lock, service, log)
 
 
-def _pipe_service_data(git_link, proc, stdin_lock, service: str, log):  # noqa: MC0001
+def _forward_to_remote(
+    proc: subprocess.Popen[bytes],
+    log: logging.Logger,
+    git_link: ClientLink,
+):
     stdout = proc.stdout
 
-    def forward_to_remote():
+    def fn():
         try:
             while stdout is not None:
                 data = stdout.read(65536)
                 if not data:
                     log.debug("Git stdout closed")
                     break
+
                 git_link.send(protocol.PackPacket(data).serialize())
+
         except Exception as e:
             log.debug("Error forwarding to remote: %s", e)
+
         finally:
             try:
                 git_link.send(protocol.DonePacket().serialize())
-            except Exception:  # noqa: B110
-                pass
 
-    def forward_to_git():
+            except Exception:
+                traceback.print_exc()
+
+    return fn
+
+
+def _forward_to_git(
+    proc: subprocess.Popen[bytes],
+    log: logging.Logger,
+    git_link: ClientLink,
+    stdin_lock: threading.Lock,
+):
+
+    def fn():
         stdin = proc.stdin
         if stdin is None:
             return
+
         try:
             while True:
                 data = git_link.receive()
@@ -147,35 +177,59 @@ def _pipe_service_data(git_link, proc, stdin_lock, service: str, log):  # noqa: 
                 packet = protocol.parse_packet(data)
                 if packet.packet_type == protocol.PACKET_PACK:
                     with stdin_lock:
-                        stdin.write(packet.payload)
+                        _ = stdin.write(packet.payload)
+
                 elif packet.packet_type == protocol.PACKET_DONE:
                     log.debug("Received DONE from server")
                     with stdin_lock:
                         stdin.close()
                         proc.stdin = None
+
                     break
+
         except Exception as e:
             log.debug("Error forwarding to git: %s", e)
+
         finally:
             with stdin_lock:
                 if proc.stdin is not None:
                     try:
                         proc.stdin.close()
-                    except Exception:  # noqa: B110
-                        pass
+
+                    except Exception:
+                        traceback.print_exc()
+
                     proc.stdin = None
 
-    t_remote = threading.Thread(target=forward_to_remote, daemon=True)
-    t_git = threading.Thread(target=forward_to_git, daemon=True)
+    return fn
+
+
+def _pipe_service_data(
+    git_link: ClientLink,
+    proc: subprocess.Popen[bytes],
+    stdin_lock: threading.Lock,
+    service: str,
+    log: logging.Logger,
+):
+    t_remote = threading.Thread(
+        target=_forward_to_remote(proc, log, git_link),
+        daemon=True,
+    )
+    t_git = threading.Thread(
+        target=_forward_to_git(proc, log, git_link, stdin_lock),
+        daemon=True,
+    )
 
     t_remote.start()
     t_git.start()
 
-    proc.wait()
+    _ = proc.wait()
     log.debug("%s exited with code %d", service, proc.returncode)
 
     if proc.returncode != 0:
-        stderr_data = proc.stderr.read().decode("utf-8", errors="replace") if proc.stderr else ""
+        stderr_data = (
+            proc.stderr.read().decode("utf-8", errors="replace") if proc.stderr else ""
+        )
         log.warning("%s exited with code %d: %s", service, proc.returncode, stderr_data)
 
     t_remote.join(timeout=5)
