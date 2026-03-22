@@ -354,15 +354,15 @@ def _connect(
                 + f"after {timeout}s. Verify the server is running and the destination hash is correct."
             )
 
-    identity = RNS.Identity.recall(destination_hash)  # pyright: ignore[reportUnknownMemberType]
-    if identity is None:
+    server_identity = RNS.Identity.recall(destination_hash)  # pyright: ignore[reportUnknownMemberType]
+    if server_identity is None:
         raise ValueError(
             f"Unknown destination: server identity not found for {destination_hexhash[:8]}... "
             + "The server may need to be restarted or the destination hash is incorrect."
         )
 
     destination = RNS.Destination(
-        identity,
+        server_identity,
         RNS.Destination.OUT,
         RNS.Destination.SINGLE,
         APP_NAME,

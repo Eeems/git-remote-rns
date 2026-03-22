@@ -44,6 +44,11 @@ class Link:
         self._link = link
         self._connected.set()
 
+    def on_link_closed(self, link: RNS.Link):
+        if self._link == link:
+            self._connected.clear()
+            self._link = None
+
     def start(self, destination: RNS.Destination) -> None:
         if self._link is not None:
             return
@@ -51,6 +56,7 @@ class Link:
         _ = RNS.Link(
             destination,
             established_callback=self.on_link_established,
+            closed_callback=self.on_link_closed,
         )
 
     def wait_for_connect(self, timeout: float = 30.0) -> bool:
