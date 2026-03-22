@@ -48,9 +48,9 @@ def serve_forever(  # noqa: PLR0913,PLR0912,R0917,too-many-positional-arguments
         assert isinstance(args.destination, str | None)  # pyright: ignore[reportAny] # nosec B101
         assert isinstance(args.config, str | None)  # pyright: ignore[reportAny] # nosec B101
         assert isinstance(args.verbose, bool)  # pyright: ignore[reportAny] # nosec B101
-        assert isinstance(args.identity, str)  # pyright: ignore[reportAny] # nosec B101
-        assert isinstance(args.save_identity, str)  # pyright: ignore[reportAny] # nosec B101
-        assert isinstance(args.announce_interval, int)  # pyright: ignore[reportAny] # nosec B101
+        assert isinstance(args.identity, str | None)  # pyright: ignore[reportAny] # nosec B101
+        assert isinstance(args.save_identity, str | None)  # pyright: ignore[reportAny] # nosec B101
+        assert isinstance(args.announce_interval, int | None)  # pyright: ignore[reportAny] # nosec B101
         repo_path = args.repo
         destination_hexhash = args.destination or destination_hexhash
         config_path = args.config or config_path
@@ -68,10 +68,6 @@ def serve_forever(  # noqa: PLR0913,PLR0912,R0917,too-many-positional-arguments
     if not os.path.isdir(repo_path):
         log.error("Not a valid repository: %s", repo_path)
         sys.exit(1)
-
-    assert identity_path is not None  # nosec B101
-    assert save_identity_path is not None  # nosec B101
-    assert config_path is not None  # nosec B101
 
     identity = _load_or_create_identity(
         log,
@@ -118,7 +114,10 @@ def _parse_args():
 
 
 def _load_or_create_identity(
-    log: logging.Logger, identity_path: str, save_identity_path: str, config_path: str
+    log: logging.Logger,
+    identity_path: str | None,
+    save_identity_path: str | None,
+    config_path: str | None,
 ):
     if identity_path:
         log.info("Loading identity from %s", identity_path)
