@@ -48,6 +48,13 @@ def get_reticulum(config_path: str | None = None):
     return _reticulum
 
 
+def set_reticulum(reticulum: RNS.Reticulum):
+    global _reticulum
+    with _reticulum_lock:
+        assert _reticulum is None
+        _reticulum = reticulum
+
+
 class Link:
     def __init__(self, link: RNS.Link | None = None):
         self._link: RNS.Link | None = link
@@ -56,7 +63,7 @@ class Link:
 
     def on_link_established(self, link: RNS.Link):
         self._link = link
-        self.set_connected()
+        self.connected()
 
     def start(self, destination: RNS.Destination) -> None:
         if self._link is not None:
@@ -68,7 +75,7 @@ class Link:
     def wait_for_connect(self, timeout: float = 30.0) -> bool:
         return self._connected.wait(timeout)
 
-    def set_connected(self):
+    def connected(self):
         self._connected.set()
 
     def send(self, data: bytes):

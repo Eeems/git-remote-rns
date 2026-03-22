@@ -11,11 +11,13 @@ from rnsremote import (
     protocol,
     client,
 )
-from rnsremote.connection import Link
+from rnsremote.connection import (
+    Link,
+    configure_logging,
+)
 from rnsremote.client import (
     ClientLink,
     pipe_git_service,
-    configure_logging,
 )
 
 
@@ -351,7 +353,7 @@ class TestLink:
         assert result is False
         assert not link._connected.is_set()
 
-        link.set_connected()
+        link.connected()
         result = link.wait_for_connect(timeout=0.1)
         assert result is True
 
