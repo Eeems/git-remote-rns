@@ -3,13 +3,13 @@ name = "git-remote-rns"
 version = "0.1.0"
 description = "Git remote helper for syncing repositories over Reticulum"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 license = "MIT"
 authors = [{name = "Eeems"}]
 dependencies = ["rns>=1.0"]
 
 [project.optional-dependencies]
-dev = ["pytest>=7.0", "prospector[with_everything]"]
+dev = ["pytest>=7.0", "prospector[with_everything]", 'basedpyright']
 
 [project.scripts]
 git-remote-rns = "rnsremote.__main__:client"
@@ -21,3 +21,21 @@ build-backend = "nuitka.distutils.Build"
 
 [tool.setuptools]
 packages = ["rnsremote"]
+
+[tool.ruff]
+exclude = [".venv", "typings", "build"]
+
+[tool.pyright]
+exclude = [".venv/**", "typings/**", "build/**"]
+
+[tool.pylint."messages control"]
+disable = [
+	"line-too-long",
+	"invalid-name",
+	"global-statement",
+	"broad-exception-caught",
+	"too-many-statements"
+]
+
+[tool.bandit]
+exclude_dirs = [".venv", "typings", "build"]

@@ -37,14 +37,26 @@ clean:
 
 lint: install-dev
 	@source ${VENV_ACTIVATE}; \
-	python -m prospector rnsremote/ \
+	python -m prospector \
+	  --profile strictness_veryhigh \
 	  --with-tool pyroma \
 	  --with-tool vulture \
 	  --with-tool bandit \
 	  --with-tool pyright \
-	  --with-tool ruff
+	  --with-tool ruff \
+	  --without-tool pycodestyle \
+	  rnsremote; \
+	python -m prospector \
+	  --profile strictness_veryhigh \
+	  --with-tool pyroma \
+	  --with-tool vulture \
+	  --with-tool bandit \
+	  --with-tool pyright \
+	  --with-tool ruff \
+	  --without-tool pycodestyle \
+	  tests
 
-review: lint test
+review:
 	@if command -v coderabbit >/dev/null 2>&1; then \
 	  output=$$(coderabbit review --prompt-only 2>&1); \
 	  status=$$?; \

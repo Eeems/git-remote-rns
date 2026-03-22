@@ -1,9 +1,20 @@
 import os
 import tempfile
 import pytest
-from unittest.mock import MagicMock, patch, call
-from rnsremote import helper, server, connection, protocol
-from rnsremote.connection import ClientLink, Link
+from unittest.mock import (
+    MagicMock,
+    patch,
+)
+from rnsremote import (
+    helper,
+    server,
+    connection,
+    protocol,
+)
+from rnsremote.connection import (
+    ClientLink,
+    Link,
+)
 
 
 class TestURLParsing:
@@ -64,7 +75,7 @@ class TestDestinationHashValidation:
     def test_valid_hex_characters(self):
         dest_hash = "a1b2c3d4e5f678901234567890123456"
         try:
-            bytes.fromhex(dest_hash)
+            _ = bytes.fromhex(dest_hash)
             valid = True
         except ValueError:
             valid = False
@@ -73,7 +84,7 @@ class TestDestinationHashValidation:
     def test_invalid_hex_characters(self):
         dest_hash = "g1h2i3j4k5l678901234567890123456"
         try:
-            bytes.fromhex(dest_hash)
+            _ = bytes.fromhex(dest_hash)
             valid = True
         except ValueError:
             valid = False
@@ -191,7 +202,7 @@ class TestServerIdentitySaveLoad:
         try:
             os.unlink(path)
             with pytest.raises(ValueError, match="Failed to load identity"):
-                connection.load_identity(path)
+                _ = connection.load_identity(path)
         finally:
             if os.path.exists(path):
                 os.unlink(path)
@@ -293,7 +304,7 @@ class TestHandleConnection:
                 self._link.close()
 
         server_link = TestServerLink(mock_link, "/repo")
-        server.handle_connection(server_link)
+        server.handle_connection(server_link)  # pyright: ignore[reportArgumentType]
 
         mock_link.wait_for_connect.assert_called_once()
         assert mock_link.send.call_count >= 2
@@ -320,7 +331,7 @@ class TestHandleConnection:
                 self._link.close()
 
         server_link = TestServerLink(mock_link, "/repo")
-        server.handle_connection(server_link)
+        server.handle_connection(server_link)  # pyright: ignore[reportArgumentType]
 
         mock_link.close.assert_called_once()
 
@@ -333,7 +344,6 @@ class TestLink:
 
     def test_link_wait_for_connect_sets_connected(self):
         link = Link()
-        import threading
 
         result = link.wait_for_connect(timeout=0.1)
         assert result is False
@@ -689,7 +699,7 @@ class TestEndToEnd:
                 assert False, f"rngit exited early with code {server_proc.returncode}"
 
             assert dest_hash is not None, (
-                f"Could not get destination hash from server. rngit output above."
+                "Could not get destination hash from server. rngit output above."
             )
             assert len(dest_hash) == 32, f"Invalid destination hash length: {dest_hash}"
 

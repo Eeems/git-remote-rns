@@ -1,3 +1,6 @@
+from typing import override
+
+
 PROTOCOL_VERSION = 1
 APP_NAME = "git"
 
@@ -13,8 +16,8 @@ PACKET_ERROR = 0xFF
 
 class Packet:
     def __init__(self, packet_type: int, payload: bytes = b""):
-        self.packet_type = packet_type
-        self.payload = payload
+        self.packet_type: int = packet_type
+        self.payload: bytes = payload
 
     def serialize(self) -> bytes:
         return bytes([self.packet_type]) + self.payload
@@ -23,6 +26,7 @@ class Packet:
     def deserialize(cls, data: bytes) -> "Packet":
         if not data:
             raise ValueError("Empty packet data")
+
         packet_type = data[0]
         payload = data[1:] if len(data) > 1 else b""
         return cls(packet_type, payload)
@@ -31,55 +35,68 @@ class Packet:
 class HandshakePacket(Packet):
     def __init__(self, version: int, repo_path: str = ""):
         super().__init__(PACKET_HANDSHAKE)
-        self.version = version
-        self.repo_path = repo_path
+        self.version: int = version
+        self.repo_path: str = repo_path
 
+    @override
     def serialize(self) -> bytes:
-        if not (0 <= self.version <= 255):
+        if not 0 <= self.version <= 255:
             raise ValueError(f"Version must be 0-255, got {self.version}")
+
         try:
             payload = self.version.to_bytes(1, "big") + self.repo_path.encode("utf-8")
+
         except UnicodeEncodeError as e:
             raise ValueError(f"Failed to encode repo_path: {e}") from e
+
         return bytes([self.packet_type]) + payload
 
     @classmethod
+    @override
     def deserialize(cls, data: bytes) -> "HandshakePacket":
         if not data:
             raise ValueError("Empty handshake data")
         try:
             version = data[0]
             repo_path = data[1:].decode("utf-8") if len(data) > 1 else ""
+
         except UnicodeDecodeError as e:
             raise ValueError(f"Failed to decode handshake data: {e}") from e
+
         return cls(version, repo_path)
 
 
 class RefListPacket(Packet):
     def __init__(self, refs: dict[str, str]):
         super().__init__(PACKET_REF_LIST)
-        self.refs = refs
+        self.refs: dict[str, str] = refs
 
+    @override
     def serialize(self) -> bytes:
-        lines = []
+        lines: list[str] = []
         for name, sha in self.refs.items():
             lines.append(f"{sha} {name}")
+
         payload = "\n".join(lines).encode("utf-8")
         return bytes([self.packet_type]) + payload
 
     @classmethod
+    @override
     def deserialize(cls, data: bytes) -> "RefListPacket":
-        refs = {}
+        refs: dict[str, str] = {}
         if data:
             decoded = data.decode("utf-8")
             for line in decoded.strip().split("\n"):
                 if not line:
                     continue
+
                 parts = line.split(" ", 1)
                 if len(parts) != 2:
                     raise ValueError(f"Malformed ref line: {line!r}")
+
                 sha, name = parts
                 refs[name] = sha
+
         return cls(refs)
 
 
@@ -88,6 +105,7 @@ class PackPacket(Packet):
         super().__init__(PACKET_PACK, data)
 
     @classmethod
+    @override
     def deserialize(cls, data: bytes) -> "PackPacket":
         return cls(data)
 
@@ -97,6 +115,7 @@ class DonePacket(Packet):
         super().__init__(PACKET_DONE)
 
     @classmethod
+    @override
     def deserialize(cls, data: bytes) -> "DonePacket":
         if data:
             raise ValueError("DonePacket should have no payload")
@@ -108,6 +127,7 @@ class WantPacket(Packet):
         super().__init__(PACKET_WANT, sha.encode("utf-8") if sha else b"")
 
     @classmethod
+    @override
     def deserialize(cls, data: bytes) -> "WantPacket":
         return cls(data.decode("utf-8") if data else "")
 
@@ -117,6 +137,7 @@ class HavePacket(Packet):
         super().__init__(PACKET_HAVE, sha.encode("utf-8") if sha else b"")
 
     @classmethod
+    @override
     def deserialize(cls, data: bytes) -> "HavePacket":
         return cls(data.decode("utf-8") if data else "")
 
@@ -124,9 +145,10 @@ class HavePacket(Packet):
 class ErrorPacket(Packet):
     def __init__(self, message: str = ""):
         super().__init__(PACKET_ERROR, message.encode("utf-8") if message else b"")
-        self.message = message
+        self.message: str = message
 
     @classmethod
+    @override
     def deserialize(cls, data: bytes) -> "ErrorPacket":
         return cls(data.decode("utf-8") if data else "")
 
