@@ -56,31 +56,87 @@ def on_identified(link: RNS.Link, identity: RNS.Identity):
         raise
 
 
+def identity_allowed_error(
+    identity: RNS.Identity | None, allow_list: set[str]
+) -> str | None:
+    if identity is None:
+        return "Not identified"
+
+    if identity.hexhash not in allow_list:
+        return "Not allowed"
+
+
+def read_allowed_error(identity: RNS.Identity | None) -> str | None:
+    global _read_list
+    return identity_allowed_error(identity, _read_list)
+
+
+def write_allowed_error(identity: RNS.Identity | None) -> str | None:
+    global _write_list
+    return identity_allowed_error(identity, _write_list)
+
+
+def request_repo_path(data: bytes) -> tuple[str | None, tuple[str, bytes] | None]:
+    global _repo_path
+    try:
+        assert isinstance(data, bytes), "data must be bytes"
+        assert _repo_path is not None, "_repo_path not set"
+        parts = data.split(b"\n", maxsplit=1)
+        path = parts[0].decode()
+        if ".." in path:
+            return "Invalid path", None
+
+        base_path = os.path.realpath(_repo_path)
+        repo_path = os.path.realpath(os.path.join(base_path, path))
+        if not repo_path.startswith(base_path):
+            return "Invalid path", None
+
+        if not os.path.exists(repo_path):
+            return "Path not Found", None
+
+        if not os.path.isdir(repo_path):
+            return "Path is not directory", None
+
+        return (None, (repo_path, b"" if len(parts) == 1 else parts[1]))
+
+    except Exception as e:
+        traceback.print_exc()
+        return str(e), None
+
+
+def log_request(path: str, repo_path: str, *args: object):
+    global _repo_path
+    repo_path = os.path.relpath(repo_path, _repo_path)
+    log.debug(f"REQUEST {path} {repo_path} {' '.join(f'{f}' for f in args)}")
+
+
 def on_list_request(
     path: str,
-    _data: bytes,
+    data: bytes,
     _request_id: bytes,
     remote_identity: RNS.Identity | None,
     _request_at: float,
 ) -> bytes | None:
     try:
-        global _read_list
-        if remote_identity is None:
-            return b"\1Not allowed"
-
-        if (
-            remote_identity.hexhash not in _write_list
+        err = (
+            write_allowed_error(remote_identity)
             if path == "list-for-push"
-            else _read_list
-        ):
-            return b"\1Not allowed"
+            else read_allowed_error(remote_identity)
+        )
+        if err is not None:
+            return b"\1" + err.encode()
 
-        log.debug(f"REQUEST {path}")
-        global _repo_path
-        assert _repo_path is not None
-        head_path = os.path.join(_repo_path, ".git", "HEAD")
+        err, res = request_repo_path(data)
+        if err is not None:
+            return b"\1" + err.encode()
+
+        assert res is not None
+        repo_path, data = res
+
+        log_request(path, repo_path)
+        head_path = os.path.join(repo_path, ".git", "HEAD")
         if not os.path.exists(head_path):
-            head_path = os.path.join(_repo_path, "HEAD")
+            head_path = os.path.join(repo_path, "HEAD")
 
         with open(head_path, "r") as f:
             ref = f.read()[5:].rstrip()
@@ -88,7 +144,7 @@ def on_list_request(
         proc = subprocess.run(
             ["git", "refs", "list", "--format", "%(objectname) %(refname)"],
             text=False,
-            cwd=_repo_path,
+            cwd=repo_path,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
@@ -98,8 +154,9 @@ def on_list_request(
 
         return b"\0" + proc.stdout + f"@{ref} HEAD\n".encode()
 
-    except Exception:
-        return b"\1" + traceback.format_exc().encode()
+    except Exception as e:
+        traceback.print_exc()
+        return b"\1" + str(e).encode()
 
 
 def on_fetch_request(
@@ -110,22 +167,24 @@ def on_fetch_request(
     _request_at: float,
 ) -> bytes | None:
     try:
-        global _read_list
-        if remote_identity is None:
-            return b"\1Not allowed"
+        err = read_allowed_error(remote_identity)
+        if err is not None:
+            return b"\1" + err.encode()
 
-        if remote_identity.hexhash not in _read_list:
-            return b"\1Not allowed"
+        err, res = request_repo_path(data)
+        if err is not None:
+            return b"\1" + err.encode()
 
-        global _repo_path
-        assert _repo_path is not None
+        assert res is not None
+        repo_path, data = res
+
         sha, ref = data.decode().split(" ", maxsplit=1)
-        log.debug(f"REQUEST {path} {sha} {ref}")
+        log_request(path, repo_path, sha, ref)
         with TemporaryDirectory() as tmpdir:
             bundle = os.path.join(tmpdir, f"{sha}.bundle")
             proc = subprocess.run(
                 ["git", "bundle", "create", "--no-progress", bundle, ref],
-                cwd=_repo_path,
+                cwd=repo_path,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
             )
@@ -136,8 +195,9 @@ def on_fetch_request(
             with open(bundle, "rb") as f:
                 return b"\0" + f.read()
 
-    except Exception:
-        return b"\1" + traceback.format_exc().encode()
+    except Exception as e:
+        traceback.print_exc()
+        return b"\1" + str(e).encode()
 
 
 def on_push_request(
@@ -148,24 +208,24 @@ def on_push_request(
     _request_at: float,
 ) -> bytes | None:
     try:
-        global _write_list
-        if remote_identity is None:
-            return b"\1Not allowed"
+        err = write_allowed_error(remote_identity)
+        if err is not None:
+            return b"\1" + err.encode()
 
-        if remote_identity.hexhash not in _write_list:
-            return b"\1Not allowed"
+        err, res = request_repo_path(data)
+        if err is not None:
+            return b"\1" + err.encode()
 
-        global _repo_path
-        assert _repo_path is not None
+        assert res is not None
+        repo_path, data = res
+
         info, data = data.split(b"\n", maxsplit=1)
         local_ref, remote_ref = info.decode().split(":", maxsplit=1)
         force = local_ref.startswith("+")
         if force:
             local_ref = local_ref[1:]
 
-        log.debug(
-            f"REQUEST {path} {'(force) ' if force else ''}{local_ref} {remote_ref}"
-        )
+        log_request(path, repo_path, local_ref, remote_ref, "(force) " if force else "")
         with TemporaryDirectory() as tmpdir:
             bundle = os.path.join(tmpdir, "bundle")
             with open(bundle, "wb") as f:
@@ -173,7 +233,7 @@ def on_push_request(
 
             proc = subprocess.run(
                 ["git", "bundle", "verify", bundle],
-                cwd=_repo_path,
+                cwd=repo_path,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
             )
@@ -189,7 +249,7 @@ def on_push_request(
                     f"{local_ref}:{remote_ref}",
                     *(["--force"] if force else []),
                 ],
-                cwd=_repo_path,
+                cwd=repo_path,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
             )
@@ -197,8 +257,9 @@ def on_push_request(
 
         return proc.returncode.to_bytes(1, "big") + proc.stderr
 
-    except Exception:
-        return b"\1" + traceback.format_exc().encode()
+    except Exception as e:
+        traceback.print_exc()
+        return b"\1" + str(e).encode()
 
 
 def on_delete_request(
@@ -209,29 +270,32 @@ def on_delete_request(
     _request_at: float,
 ):
     try:
-        global _write_list
-        if remote_identity is None:
-            return b"\1Not allowed"
+        err = write_allowed_error(remote_identity)
+        if err is not None:
+            return b"\1" + err.encode()
 
-        if remote_identity.hexhash not in _write_list:
-            return b"\1Not allowed"
+        err, res = request_repo_path(data)
+        if err is not None:
+            return b"\1" + err.encode()
 
-        global _repo_path
-        assert _repo_path is not None
+        assert res is not None
+        repo_path, data = res
+
         ref = data
-        log.debug(f"REQUEST {path} {data}")
+        log_request(path, repo_path, data)
 
         proc = subprocess.run(
             ["git", "update-ref", "-d", ref],
-            cwd=_repo_path,
+            cwd=repo_path,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
         log.debug(f"git update-ref return code: {proc.returncode}")
         return b"\0" + proc.stderr
 
-    except Exception:
-        return b"\1" + traceback.format_exc().encode()
+    except Exception as e:
+        traceback.print_exc()
+        return b"\1" + str(e).encode()
 
 
 def main(argv: Sequence[str] | None = None) -> int:
