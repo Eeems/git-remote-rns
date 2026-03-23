@@ -62,7 +62,11 @@ def request(
         case RNS.RequestReceipt.READY:
             data = receipt.get_response()  # pyright: ignore[reportUnknownVariableType]
             assert isinstance(data, bytes)
-            return None, data
+            returncode = int.from_bytes(data[0:1], "big")
+            if returncode:
+                return "Remote error: " + data[1:].decode(), None
+
+            return None, data[1:]
 
         case _:
             return f"Invalid status: {receipt.get_status()}", None
@@ -143,6 +147,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         APP_NAME,
     )
     link = RNS.Link(server_destination, on_link_established, on_link_closed)
+    push_queue: list[tuple[str, str]] = []
     try:
         for line in sys.stdin:
             _ = _linkEvent.wait()
@@ -155,6 +160,60 @@ def main(argv: Sequence[str] | None = None) -> int:
             assert isinstance(parts, list)
             if not parts:
                 log.debug("\\n")
+                while push_queue:
+                    local_ref, remote_ref = push_queue.pop(0)
+                    if local_ref.startswith("+"):
+                        local_ref = local_ref[1:]
+
+                    if not local_ref:
+                        err, data = request(
+                            link,
+                            "delete",
+                            remote_ref.encode(),
+                        )
+                        if err is not None:
+                            _ = sys.stderr.write(err)
+                            _ = sys.stderr.write("\n")
+                            _ = sys.stderr.flush()
+                            return 1
+
+                        if data:
+                            _ = sys.stderr.buffer.write(data)
+                            _ = sys.stderr.buffer.write(b"\n")
+                            _ = sys.stderr.flush()
+
+                    else:
+                        with TemporaryDirectory() as tmpdir:
+                            bundle = os.path.join(tmpdir, "bundle")
+                            _ = subprocess.check_call(
+                                [
+                                    "git",
+                                    "bundle",
+                                    "create",
+                                    "--progress",
+                                    bundle,
+                                    local_ref,
+                                ]
+                            )
+                            with open(bundle, "rb") as f:
+                                data = f.read()
+
+                            err, data = request(
+                                link,
+                                "push",
+                                f"{local_ref}:{remote_ref}\n".encode() + data,
+                            )
+                            if err is not None:
+                                _ = sys.stderr.write(err)
+                                _ = sys.stderr.write("\n")
+                                _ = sys.stderr.flush()
+                                return 1
+
+                            if data:
+                                _ = sys.stderr.buffer.write(data)
+                                _ = sys.stderr.buffer.write(b"\n")
+                                _ = sys.stderr.flush()
+
                 _ = sys.stdout.write("\n")
                 try:
                     _ = sys.stdout.flush()
@@ -191,13 +250,18 @@ def main(argv: Sequence[str] | None = None) -> int:
                             _ = f.write(data)
 
                         _ = subprocess.check_call(
-                            ["git", "bundle", "unbundle", bundle, ref],
+                            ["git", "bundle", "verify", bundle],
+                            stdout=subprocess.DEVNULL,
+                        )
+                        _ = subprocess.check_call(
+                            ["git", "bundle", "unbundle", "--progress", bundle, ref],
                             stdout=subprocess.DEVNULL,
                         )
 
                 case "push":
                     local_ref, remote_ref = parts[1].rstrip().split(":", maxsplit=1)
                     log.debug(f"PUSH {local_ref} {remote_ref}")
+                    push_queue.append((local_ref, remote_ref))
 
                 case "list":
                     log.debug("LIST")
