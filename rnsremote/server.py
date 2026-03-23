@@ -4,9 +4,11 @@ import os
 import subprocess
 import time
 import traceback
+import struct
 
 import RNS
 
+from typing import cast
 from collections.abc import Sequence
 from tempfile import TemporaryDirectory
 
@@ -14,6 +16,8 @@ from . import __version__
 from .shared import (
     configure_logging,
     APP_NAME,
+    is_valid_hexhash,
+    packets,
 )
 
 __all__ = [
@@ -22,16 +26,30 @@ __all__ = [
 
 log: logging.Logger = logging.getLogger(__name__)
 _repo_path: str | None = None
+_write_list: set[str] = set()
+_read_list: set[str] = set()
 
 
 def on_link_closed(link: RNS.Link):
-    log.debug(f"CLOSED: {link}")
+    log.debug(f"CLOSED: {link} {link.get_remote_identity()}")
 
 
 def on_link_established(link: RNS.Link):
     try:
         log.debug(f"ESTABLISHED: {link}")
         link.set_link_closed_callback(on_link_closed)  # pyright: ignore[reportUnknownMemberType]
+        link.set_remote_identified_callback(on_identified)  # pyright: ignore[reportUnknownMemberType]
+
+    except Exception:
+        traceback.print_exc()
+        raise
+
+
+def on_identified(link: RNS.Link, identity: RNS.Identity):
+    try:
+        assert link.get_remote_identity() == identity
+        _ = RNS.Packet(link, packets.PACKET_IDENTIFIED.value).send()
+        log.debug(f"IDENTIFIED: {link} {identity}")
 
     except Exception:
         traceback.print_exc()
@@ -42,10 +60,21 @@ def on_list_request(
     path: str,
     _data: bytes,
     _request_id: bytes,
-    _link_id: RNS.Identity,
-    _remote_identity: RNS.Identity,
+    remote_identity: RNS.Identity | None,
+    _request_at: float,
 ) -> bytes | None:
     try:
+        global _read_list
+        if remote_identity is None:
+            return b"\1Not allowed"
+
+        if (
+            remote_identity.hexhash not in _write_list
+            if path == "list-for-push"
+            else _read_list
+        ):
+            return b"\1Not allowed"
+
         log.debug(f"REQUEST {path}")
         global _repo_path
         assert _repo_path is not None
@@ -77,10 +106,17 @@ def on_fetch_request(
     path: str,
     data: bytes,
     _request_id: bytes,
-    _link_id: RNS.Identity,
-    _remote_identity: RNS.Identity,
+    remote_identity: RNS.Identity | None,
+    _request_at: float,
 ) -> bytes | None:
     try:
+        global _read_list
+        if remote_identity is None:
+            return b"\1Not allowed"
+
+        if remote_identity.hexhash not in _read_list:
+            return b"\1Not allowed"
+
         global _repo_path
         assert _repo_path is not None
         sha, ref = data.decode().split(" ", maxsplit=1)
@@ -108,10 +144,17 @@ def on_push_request(
     path: str,
     data: bytes,
     _request_id: bytes,
-    _link_id: RNS.Identity,
-    _remote_identity: RNS.Identity,
+    remote_identity: RNS.Identity | None,
+    _request_at: float,
 ) -> bytes | None:
     try:
+        global _write_list
+        if remote_identity is None:
+            return b"\1Not allowed"
+
+        if remote_identity.hexhash not in _write_list:
+            return b"\1Not allowed"
+
         global _repo_path
         assert _repo_path is not None
         info, data = data.split(b"\n", maxsplit=1)
@@ -162,10 +205,17 @@ def on_delete_request(
     path: str,
     data: bytes,
     _request_id: bytes,
-    _link_id: RNS.Identity,
-    _remote_identity: RNS.Identity,
+    remote_identity: RNS.Identity | None,
+    _request_at: float,
 ):
     try:
+        global _write_list
+        if remote_identity is None:
+            return b"\1Not allowed"
+
+        if remote_identity.hexhash not in _write_list:
+            return b"\1Not allowed"
+
         global _repo_path
         assert _repo_path is not None
         ref = data
@@ -185,7 +235,6 @@ def on_delete_request(
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    global _repo_path
     parser = argparse.ArgumentParser(description="RNS Git Server", allow_abbrev=False)
     _ = parser.add_argument("repo", help="Path to git repository to serve")
     _ = parser.add_argument(
@@ -212,6 +261,22 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="Interval in seconds between announces (default: announce once)",
         dest="announce_interval",
     )
+    _ = parser.add_argument(
+        "-w",
+        "--allow-write",
+        action="append",
+        default=[],
+        help="Identities allowed to write to the repository. Will automatically be allowed to read.",
+        dest="allow_write",
+    )
+    _ = parser.add_argument(
+        "-r",
+        "--allow-read",
+        action="append",
+        default=[],
+        help="Identities allowed to read the repository",
+        dest="allow_read",
+    )
     args = parser.parse_args(argv)
 
     assert isinstance(args.repo, str)  # pyright: ignore[reportAny] # nosec B101
@@ -222,6 +287,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not os.path.isdir(repo_path):
         raise ValueError(f"Not a directory: {repo_path}")
 
+    global _repo_path
     _repo_path = repo_path
 
     assert isinstance(args.config, str | None)  # pyright: ignore[reportAny] # nosec B101
@@ -237,6 +303,29 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     assert isinstance(args.announce_interval, int | None)  # pyright: ignore[reportAny] # nosec B101
     announce_interval = args.announce_interval
+
+    assert isinstance(args.allow_read, list)  # pyright: ignore[reportAny]
+    assert all(x for x in args.allow_read if isinstance(x, str))  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+    read_list = set(cast(list[str], args.allow_read))
+
+    for allow in read_list:
+        if not is_valid_hexhash(allow):
+            raise ValueError(f"Invalid read hexhash: {allow}")
+
+    assert isinstance(args.allow_write, list)  # pyright: ignore[reportAny]
+    assert all(x for x in args.allow_write if isinstance(x, str))  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+    write_list = set(cast(list[str], args.allow_write))
+
+    global _write_list
+    _write_list = write_list
+    global _read_list
+    _read_list = read_list
+
+    for allow in write_list:
+        if not is_valid_hexhash(allow):
+            raise ValueError(f"Invalid write hexhash: {allow}")
+
+    read_list |= write_list
 
     configure_logging(logging.DEBUG if verbose else logging.WARNING)
 
@@ -265,26 +354,40 @@ def main(argv: Sequence[str] | None = None) -> int:
         RNS.Destination.SINGLE,
         APP_NAME,
     )
-    log.info(f"Destination: {RNS.prettyhexrep(server_destination.hash)}")  # pyright: ignore[reportUnknownMemberType]
+
+    log.info("Destination: %s", RNS.prettyhexrep(server_destination.hash))  # pyright: ignore[reportUnknownMemberType]
+    log.info("Read list: %s", read_list)
+    log.info("Write list: %s", write_list)
+    allow_list = (bytes.fromhex(x) for x in read_list)
     server_destination.register_request_handler(  # pyright: ignore[reportUnknownMemberType]
         "list",
         on_list_request,
         RNS.Destination.ALLOW_ALL,
+        allow_list,
+    )
+    server_destination.register_request_handler(  # pyright: ignore[reportUnknownMemberType]
+        "list-for-push",
+        on_list_request,
+        RNS.Destination.ALLOW_ALL,
+        allow_list,
     )
     server_destination.register_request_handler(  # pyright: ignore[reportUnknownMemberType]
         "fetch",
         on_fetch_request,
         RNS.Destination.ALLOW_ALL,
+        allow_list,
     )
     server_destination.register_request_handler(  # pyright: ignore[reportUnknownMemberType]
         "push",
         on_push_request,
         RNS.Destination.ALLOW_ALL,
+        allow_list,
     )
     server_destination.register_request_handler(  # pyright: ignore[reportUnknownMemberType]
         "delete",
         on_delete_request,
         RNS.Destination.ALLOW_ALL,
+        allow_list,
     )
     server_destination.set_link_established_callback(on_link_established)  # pyright: ignore[reportUnknownMemberType]
 

@@ -18,6 +18,7 @@ from .shared import (
     configure_logging,
     APP_NAME,
     is_valid_hexhash,
+    packets,
 )
 
 __all__ = [
@@ -27,12 +28,15 @@ __all__ = [
 log: logging.Logger = logging.getLogger(__name__)
 
 _linkEvent: threading.Event = threading.Event()
+_identity: RNS.Identity | None = None
 
 
 def on_link_established(link: RNS.Link):
-    global _linkEvent
+    global _identity
+    assert _identity is not None
     log.debug(f"ESTABLISHED: {link}")
-    _linkEvent.set()
+    link.set_packet_callback(on_packet)  # pyright: ignore[reportUnknownMemberType]
+    _ = link.identify(_identity)  # pyright: ignore[reportUnknownMemberType]
 
 
 def on_link_closed(link: RNS.Link):
@@ -41,10 +45,22 @@ def on_link_closed(link: RNS.Link):
     _linkEvent.clear()
 
 
+def on_packet(message: bytes, _packet: RNS.Packet):
+    global _linkEvent
+    log.debug("PACKET: %s", message)
+    match message:
+        case packets.PACKET_IDENTIFIED.value:
+            _linkEvent.set()
+
+        case _:
+            log.error("Invalid packet: %d", message)
+
+
 def request(
     link: RNS.Link, path: str, data: bytes | None = None
 ) -> tuple[str | None, bytes | None]:
     event = threading.Event()
+    log.debug("REQUEST %s", path)
     receipt = link.request(  # pyright: ignore[reportUnknownMemberType]
         path,
         data,
@@ -74,6 +90,7 @@ def request(
 
 def main(argv: Sequence[str] | None = None) -> int:
     global _linkEvent
+    global _identity
     parser = argparse.ArgumentParser(prog="git-remote-rns")
     _ = parser.add_argument("remote", help="Remote name (ignored)")
     _ = parser.add_argument("url", help="Remote URL (<hash>[/path])")
@@ -128,6 +145,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     if identity is None:
         identity = RNS.Identity(True)
         _ = identity.to_file(identity_path)  # pyright: ignore[reportUnknownMemberType]
+
+    _identity = identity
 
     if not RNS.Transport.has_path(destination):  # pyright: ignore[reportUnknownMemberType]
         RNS.Transport.request_path(destination)  # pyright: ignore[reportUnknownMemberType]
@@ -265,7 +284,11 @@ def main(argv: Sequence[str] | None = None) -> int:
 
                 case "list":
                     log.debug("LIST")
-                    err, data = request(link, "list")
+                    path = "list"
+                    if len(parts) > 1 and "for-push" in parts[1]:
+                        path = "list-for-push"
+
+                    err, data = request(link, path)
                     if err is not None:
                         _ = sys.stderr.write(err)
                         _ = sys.stderr.write("\n")
