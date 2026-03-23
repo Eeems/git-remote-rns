@@ -27,11 +27,10 @@ __all__ = [
 class ClientLink(Link):
     def __init__(
         self,
-        link: RNS.Link | None,
         destination_hexhash: str,
         repo_path: str = "",
     ):
-        super().__init__(link)
+        super().__init__()
         self.destination_hexhash: str = destination_hexhash
         self.repo_path: str = repo_path
 
@@ -115,7 +114,7 @@ def _run_helper(log: logging.Logger, destination_hash: str, repo_path: str = "")
     log.debug("Connecting to %s...", destination_hash[:8])
     git_link = _connect(destination_hash, repo_path, 30)
 
-    if not git_link.wait_for_connect(timeout=30):
+    if not git_link.wait_for_connect():
         log.error("Failed to connect to remote")
         sys.exit(1)
 
@@ -128,32 +127,34 @@ def _run_helper(log: logging.Logger, destination_hash: str, repo_path: str = "")
             sys.stdout.flush()  # pyright: ignore[reportUnusedCallResult]
             break
 
-        if args[0] == "capabilities":
-            print("connect")
-            print()
+        match args[0]:
+            case "capabilities":
+                print("connect")
+                print()
 
-        elif args[0] == "list":
-            refs = git_link.request_refs()
-            for name, sha in refs.items():
-                print(f"{sha} {name}")
-            print()
+            case "list":
+                refs = git_link.request_refs()
+                for name, sha in refs.items():
+                    print(f"{sha} {name}")
 
-        elif args[0] == "connect":
-            service = args[1] if len(args) > 1 else None
-            if service not in ("git-upload-pack", "git-receive-pack"):
-                print("error: Unsupported service", file=sys.stderr)
+                print()
+
+            case "connect":
+                service = args[1] if len(args) > 1 else None
+                if service not in ("git-upload-pack", "git-receive-pack"):
+                    print("error: Unsupported service", file=sys.stderr)
+                    break
+
+                log.debug("Connecting to service: %s", service)
+                print()
+                _ = sys.stdout.flush()
+
+                pipe_git_service(git_link, service)
                 break
 
-            log.debug("Connecting to service: %s", service)
-            print()
-            _ = sys.stdout.flush()
-
-            pipe_git_service(git_link, service)
-            break
-
-        else:
-            print(f"error: Unknown command '{args[0]}'", file=sys.stderr)
-            sys.exit(1)
+            case _:
+                print(f"error: Unknown command '{args[0]}'", file=sys.stderr)
+                sys.exit(1)
 
         _ = sys.stdout.flush()
 
@@ -371,13 +372,7 @@ def _connect(
         protocol.APP_NAME,
     )
 
-    log.debug("Creating link...")
-    link = RNS.Link(server_destination)
-
     log.debug("Connecting to %s...", destination_hexhash[:8])
-    client_link = ClientLink(link, destination_hexhash, repo_path)
-
-    link.set_link_established_callback(client_link.on_link_established)  # pyright: ignore[reportUnknownMemberType]
-    link.set_link_closed_callback(client_link.on_link_closed)  # pyright: ignore[reportUnknownMemberType]
-
+    client_link = ClientLink(destination_hexhash, repo_path)
+    client_link.start(server_destination)
     return client_link

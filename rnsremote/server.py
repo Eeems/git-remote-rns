@@ -188,8 +188,9 @@ def _wait_for_shutdown(
             raise
 
 
-def handle_connection(link: ServerLink):
+def handle_connection(rns_link: RNS.Link):
     log = logging.getLogger(__name__)
+    link = ServerLink(rns_link, "")
 
     try:
         if not link.wait_for_connect():
