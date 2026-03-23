@@ -1,0 +1,168 @@
+name: Check and Build
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+  workflow_dispatch:
+  release:
+    types: [released]
+permissions: read-all
+jobs:
+  lint:
+    name: Lint codebase
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the Git repository
+        uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: 3.11
+          cache: "pip"
+      - name: Run lint
+        run: make lint
+  test:
+    name: Test with python ${{ matrix.python }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python:
+          - "3.11"
+          - "3.12"
+          - "3.13"
+          - "3.14"
+    steps:
+      - name: Checkout the Git repository
+        uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: "pip"
+      - name: Run tests
+        run: |
+          set -e
+          git config --global user.name "Github Runner"
+          make test
+  build-wheel:
+    name: Build wheel with python ${{ matrix.python }}
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python:
+          - "3.11"
+          - "3.12"
+          - "3.13"
+          - "3.14"
+    steps:
+      - name: Checkout the Git repository
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: "pip"
+      - name: Building package
+        run: |
+          python_version=${{ matrix.python }}
+          python_version=cp${python_version//.}
+          script=$(cat <<EOF
+          cd /src;
+          export PATH=\$PATH:/opt/python/$python_version-$python_version/bin;
+          make ${{ env.FLAGS }} wheel;
+          auditwheel repair dist/*.whl;
+          EOF
+          )
+          docker run -v $(pwd):/src \
+            quay.io/pypa/manylinux_2_34_x86_64:latest \
+            /bin/bash -c "$script"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pip-wheel-${{ matrix.python }}
+          path: wheelhouse/*
+          if-no-files-found: error
+  build-sdist:
+    name: Build sdist
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the Git repository
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - name: Install build tool
+        run: pip install build
+      - name: Building package
+        run: make sdist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pip-sdist
+          path: dist/*
+          if-no-files-found: error
+  publish:
+    name: Publish to PyPi
+    if: github.repository == 'Eeems/git-remote-rns' && github.event_name == 'release' && startsWith(github.ref, 'refs/tags')
+    needs:
+      - build-sdist
+      - build-wheel
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        artifact:
+          - "pip-sdist"
+          - "pip-wheel-3.11"
+          - "pip-wheel-3.12"
+          - "pip-wheel-3.13"
+          - "pip-wheel-3.14"
+    permissions:
+      id-token: write
+      contents: write
+    environment:
+      name: pypi
+      url: https://pypi.org/p/git-remote-rns
+    steps:
+      - name: Download pip packages
+        id: download
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+      - name: Publish package distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: ${{ steps.download.outputs.download-path }}
+          skip-existing: true
+  release:
+    name: Add ${{ matrix.artifact }} to release
+    if: github.repository == 'Eeems/git-remote-rns' && github.event_name == 'release' && startsWith(github.ref, 'refs/tags')
+    needs:
+      - build-wheel
+      - build-sdist
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        artifact:
+          - "pip-sdist"
+          - "pip-wheel-3.11"
+          - "pip-wheel-3.12"
+          - "pip-wheel-3.13"
+          - "pip-wheel-3.14"
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout the Git repository
+        uses: actions/checkout@v4
+      - name: Download artifact
+        id: download
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist
+      - name: Upload to release
+        run: find . -type f | xargs -rI {} gh release upload "$TAG" {} --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        working-directory: ${{ steps.download.outputs.download-path }}

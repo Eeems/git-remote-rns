@@ -1,20 +1,53 @@
-.PHONY: help install dev test clean review build
+.PHONY: help install dev test clean review build wheel
 
-VENV_BIN_FOLDER := $(shell python -c "import sys; print('Scripts' if sys.platform == 'win32' else 'bin')")
-VENV_ACTIVATE := .venv/$(VENV_BIN_FOLDER)/activate
+VERSION := $(shell grep -m 1 version pyproject.toml | tr -s ' ' | tr -d '"' | tr -d "'" | cut -d' ' -f3)
+PACKAGE := $(shell grep -m 1 name pyproject.toml | tr -s ' ' | tr -d '"' | tr -d "'" | cut -d' ' -f3)
+
+ifeq ($(VENV_BIN_ACTIVATE),)
+VENV_BIN_ACTIVATE := .venv/bin/activate
+endif
+define PLATFORM_SCRIPT
+from sysconfig import get_platform
+print(get_platform().replace('-', '_'), end="")
+endef
+export PLATFORM_SCRIPT
+PLATFORM := $(shell python -c "$$PLATFORM_SCRIPT")
+
+define ABI_SCRIPT
+def main():
+    try:
+        from wheel.pep425tags import get_abi_tag
+        print(get_abi_tag(), end="")
+        return
+    except ModuleNotFoundError:
+        pass
+
+    try:
+        from wheel.vendored.packaging import tags
+    except ModuleNotFoundError:
+        from packaging import tags
+
+    name=tags.interpreter_name()
+    version=tags.interpreter_version()
+    print(f"{name}{version}", end="")
+
+main()
+endef
+export ABI_SCRIPT
+ABI := $(shell python -c "$$ABI_SCRIPT")
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-10s\033[0m %s\n", $$1, $$2}'
 
-$(VENV_ACTIVATE):
+$(VENV_BIN_ACTIVATE):
 	python -m venv .venv
 
-install-deps: $(VENV_ACTIVATE)
-	@source ${VENV_ACTIVATE}; \
+install-deps: $(VENV_BIN_ACTIVATE)
+	@. ${VENV_BIN_ACTIVATE}; \
 	python -m pip install -e . -q
 
-install-dev: $(VENV_ACTIVATE)
-	@source ${VENV_ACTIVATE}; \
+install-dev: $(VENV_BIN_ACTIVATE)
+	@. ${VENV_BIN_ACTIVATE}; \
 	python -m pip install -e ".[dev]" -q
 
 install: install-deps
@@ -22,11 +55,15 @@ install: install-deps
 dev: install-dev
 
 test: install-dev
-	@source ${VENV_ACTIVATE}; \
+	@. ${VENV_BIN_ACTIVATE}; \
 	python -m pytest -v tests/
 
-build: install-dev ## Build wheel with Nuitka
-	@source ${VENV_ACTIVATE}; \
+build: wheel
+
+wheel: dist/${PACKAGE}-${VERSION}-${ABI}-${ABI}-${PLATFORM}.whl
+
+dist/${PACKAGE}-${VERSION}-${ABI}-${ABI}-${PLATFORM}.whl:
+	@. ${VENV_BIN_ACTIVATE}; \
 	python -m build --wheel
 
 clean:
@@ -37,10 +74,10 @@ clean:
 
 lint: install-dev
 	@set -e;\
-	source ${VENV_ACTIVATE}; \
+	. ${VENV_BIN_ACTIVATE}; \
 	python -m basedpyright \
 	  --warnings \
-	  rnsremote \
+	  rngit \
 	  tests; \
 	python -m prospector \
 	  --profile strictness_veryhigh \
@@ -50,7 +87,7 @@ lint: install-dev
 	  --with-tool pyright \
 	  --with-tool ruff \
 	  --without-tool pycodestyle \
-	  rnsremote; \
+	  rngit; \
 	python -m prospector \
 	  --profile strictness_veryhigh \
 	  --with-tool pyroma \
