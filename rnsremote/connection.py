@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import sys
 import threading
+import queue
 
 import RNS  # type: ignore[import-untyped]
 
@@ -35,20 +36,30 @@ def configure_logging(verbose: bool = False, level: int | None = None):
 
 class Link:
     def __init__(self, link: RNS.Link | None = None):
-        self._link: RNS.Link | None = link
+        self._link: RNS.Link | None = None
         self._log: logging.Logger = logging.getLogger(__name__)
         self._connected: threading.Event = threading.Event()
+        self._packet_queue: queue.Queue[bytes | None] = queue.Queue()
+        self._link_closed: threading.Event = threading.Event()
+        if link is not None:
+            self.on_link_established(link)
 
     def on_link_established(self, link: RNS.Link):
         self._link = link
         self._connected.set()
+        link.set_packet_callback(self.on_packet_received)  # pyright: ignore[reportUnknownMemberType]
 
     def on_link_closed(self, link: RNS.Link):
         if self._link == link:
             self._connected.clear()
             self._link = None
+            self._link_closed.set()
+            self._packet_queue.put(None)
 
-    def start(self, destination: RNS.Destination) -> None:
+    def on_packet_received(self, data: bytes, _packet: RNS.Packet) -> None:
+        self._packet_queue.put(bytes(data))
+
+    def start(self, destination: RNS.Destination, timeout: float | None = 30.0) -> None:
         if self._link is not None:
             return
 
@@ -57,8 +68,9 @@ class Link:
             established_callback=self.on_link_established,
             closed_callback=self.on_link_closed,
         )
+        _ = self.wait_for_connect(timeout)
 
-    def wait_for_connect(self, timeout: float = 30.0) -> bool:
+    def wait_for_connect(self, timeout: float | None = 30.0) -> bool:
         return self._connected.wait(timeout)
 
     def send(self, data: bytes):
@@ -70,10 +82,16 @@ class Link:
     def receive(self, timeout: float | None = None) -> bytes | None:
         if self._link is None:
             return None
-        data = self._link.receive(timeout)  # pyright: ignore[reportUnknownVariableType, reportUnknownMemberType]
-        if data is None:
+        try:
+            if timeout is None:
+                data = self._packet_queue.get()
+            else:
+                data = self._packet_queue.get(timeout=timeout)
+            if data is None:
+                return None
+            return data
+        except queue.Empty:
             return None
-        return bytes(data)  # pyright: ignore[reportUnknownArgumentType]
 
     def close(self):
         if self._link is not None:
