@@ -29,6 +29,7 @@ log: logging.Logger = logging.getLogger(__name__)
 
 _linkEvent: threading.Event = threading.Event()
 _identity: RNS.Identity | None = None
+_repo_path: str | None = None
 
 
 def on_link_established(link: RNS.Link):
@@ -57,13 +58,15 @@ def on_packet(message: bytes, _packet: RNS.Packet):
 
 
 def request(
-    link: RNS.Link, path: str, data: bytes | None = None
+    link: RNS.Link, path: str, data: bytes = b""
 ) -> tuple[str | None, bytes | None]:
+    global _repo_path
+    assert _repo_path is not None
     event = threading.Event()
     log.debug("REQUEST %s", path)
     receipt = link.request(  # pyright: ignore[reportUnknownMemberType]
         path,
-        data,
+        _repo_path.encode() + b"\n" + data,
         response_callback=lambda _, e=event: e.set(),  # pyright: ignore[reportUnknownLambdaType]
         failed_callback=lambda _, e=event: e.set(),  # pyright: ignore[reportUnknownLambdaType]
     )
@@ -89,8 +92,6 @@ def request(
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    global _linkEvent
-    global _identity
     parser = argparse.ArgumentParser(prog="git-remote-rns")
     _ = parser.add_argument("remote", help="Remote name (ignored)")
     _ = parser.add_argument("url", help="Remote URL (<hash>[/path])")
@@ -126,7 +127,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     destination = bytes.fromhex(destination_hexhash)
 
-    repo_path = parts[1] if len(parts) > 1 else ""
+    global _repo_path
+    _repo_path = parts[1] if len(parts) > 1 else "."
 
     config_path = os.environ.get("RNS_CONFIG_PATH", None)
     _ = RNS.Reticulum(config_path, RNS.LOG_VERBOSE if verbose else RNS.LOG_WARNING)
@@ -146,6 +148,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         identity = RNS.Identity(True)
         _ = identity.to_file(identity_path)  # pyright: ignore[reportUnknownMemberType]
 
+    global _identity
     _identity = identity
 
     if not RNS.Transport.has_path(destination):  # pyright: ignore[reportUnknownMemberType]
@@ -167,6 +170,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     link = RNS.Link(server_destination, on_link_established, on_link_closed)
     push_queue: list[tuple[str, str]] = []
+    global _linkEvent
     try:
         for line in sys.stdin:
             _ = _linkEvent.wait()
