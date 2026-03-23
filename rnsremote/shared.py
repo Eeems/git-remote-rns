@@ -4,8 +4,14 @@ import sys
 
 import RNS
 
+from enum import Enum
+
 APP_NAME = "git"
 EXPECTED_HEXHASH_LENGTH = (RNS.Reticulum.TRUNCATED_HASHLENGTH // 8) * 2
+
+
+class packets(Enum):
+    PACKET_IDENTIFIED = 0x01.to_bytes(1, "big")
 
 
 def configure_logging(level: int = logging.WARNING):
