@@ -1,21 +1,19 @@
 import argparse
 import logging
 import os
-import subprocess
+import subprocess  # noqa: B404
 import time
 import traceback
-import struct
+from collections.abc import Sequence
+from tempfile import TemporaryDirectory
+from typing import cast
 
 import RNS
 
-from typing import cast
-from collections.abc import Sequence
-from tempfile import TemporaryDirectory
-
 from . import __version__
 from .shared import (
-    configure_logging,
     APP_NAME,
+    configure_logging,
     is_valid_hexhash,
     packets,
 )
@@ -31,12 +29,12 @@ _read_list: set[str] = set()
 
 
 def on_link_closed(link: RNS.Link):
-    log.debug(f"CLOSED: {link} {link.get_remote_identity()}")
+    log.debug("CLOSED: %s %s", link, link.get_remote_identity())  # pyright: ignore[reportUnknownArgumentType]
 
 
 def on_link_established(link: RNS.Link):
     try:
-        log.debug(f"ESTABLISHED: {link}")
+        log.debug("ESTABLISHED: %s", link)
         link.set_link_closed_callback(on_link_closed)  # pyright: ignore[reportUnknownMemberType]
         link.set_remote_identified_callback(on_identified)  # pyright: ignore[reportUnknownMemberType]
 
@@ -47,9 +45,9 @@ def on_link_established(link: RNS.Link):
 
 def on_identified(link: RNS.Link, identity: RNS.Identity):
     try:
-        assert link.get_remote_identity() == identity
+        assert link.get_remote_identity() == identity  # nosec B101
         _ = RNS.Packet(link, packets.PACKET_IDENTIFIED.value).send()
-        log.debug(f"IDENTIFIED: {link} {identity}")
+        log.debug("IDENTIFIED: %s %s", link, identity)
 
     except Exception:
         traceback.print_exc()
@@ -65,22 +63,24 @@ def identity_allowed_error(
     if identity.hexhash not in allow_list:
         return "Not allowed"
 
+    return None
+
 
 def read_allowed_error(identity: RNS.Identity | None) -> str | None:
-    global _read_list
+    global _read_list  # pylint: disable=W0602 # noqa: F999
     return identity_allowed_error(identity, _read_list)
 
 
 def write_allowed_error(identity: RNS.Identity | None) -> str | None:
-    global _write_list
+    global _write_list  # pylint: disable=W0602 # noqa: F999
     return identity_allowed_error(identity, _write_list)
 
 
 def request_repo_path(data: bytes) -> tuple[str | None, tuple[str, bytes] | None]:
-    global _repo_path
+    global _repo_path  # pylint: disable=W0602 # noqa: F999
     try:
-        assert isinstance(data, bytes), "data must be bytes"
-        assert _repo_path is not None, "_repo_path not set"
+        assert isinstance(data, bytes), "data must be bytes"  # nosec B101
+        assert _repo_path is not None, "_repo_path not set"  # nosec B101
         parts = data.split(b"\n", maxsplit=1)
         path = parts[0].decode()
         if ".." in path:
@@ -97,11 +97,12 @@ def request_repo_path(data: bytes) -> tuple[str | None, tuple[str, bytes] | None
         if not os.path.isdir(repo_path):
             return "Path is not directory", None
 
-        proc = subprocess.run(
+        proc = subprocess.run(  # nosec B607 B603# nosec B607 B603
             ["git", "rev-parse", "--git-dir"],
             cwd=repo_path,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            check=False,
         )
         if proc.returncode:
             return (
@@ -123,9 +124,9 @@ def request_repo_path(data: bytes) -> tuple[str | None, tuple[str, bytes] | None
 
 
 def log_request(path: str, repo_path: str, *args: object):
-    global _repo_path
+    global _repo_path  # pylint: disable=W0602 # noqa: F999
     repo_path = os.path.relpath(repo_path, _repo_path)
-    log.debug(f"REQUEST {path} {repo_path} {' '.join(f'{f}' for f in args)}")
+    log.debug("REQUEST %s %s %s", path, repo_path, " ".join(f"{f}" for f in args))
 
 
 def on_list_request(
@@ -148,7 +149,7 @@ def on_list_request(
         if err is not None:
             return b"\1" + err.encode()
 
-        assert res is not None
+        assert res is not None  # nosec B101
         repo_path, data = res
 
         log_request(path, repo_path)
@@ -156,17 +157,18 @@ def on_list_request(
         if not os.path.exists(head_path):
             head_path = os.path.join(repo_path, "HEAD")
 
-        with open(head_path, "r") as f:
-            ref = f.read()[5:].rstrip()
+        with open(head_path, "rb") as f:
+            ref = f.read()[5:].rstrip().decode()
 
-        proc = subprocess.run(
+        proc = subprocess.run(  # nosec B607 B603
             ["git", "refs", "list", "--format", "%(objectname) %(refname)"],
             text=False,
             cwd=repo_path,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            check=False,
         )
-        log.debug(f"git refs list code: {proc.returncode}")
+        log.debug("git refs list code: %d", proc.returncode)
         if proc.returncode:
             return proc.returncode.to_bytes(1, "big") + proc.stderr
 
@@ -193,20 +195,21 @@ def on_fetch_request(
         if err is not None:
             return b"\1" + err.encode()
 
-        assert res is not None
+        assert res is not None  # nosec B101
         repo_path, data = res
 
         sha, ref = data.decode().split(" ", maxsplit=1)
         log_request(path, repo_path, sha, ref)
         with TemporaryDirectory() as tmpdir:
             bundle = os.path.join(tmpdir, f"{sha}.bundle")
-            proc = subprocess.run(
+            proc = subprocess.run(  # nosec B607 B603
                 ["git", "bundle", "create", "--no-progress", bundle, ref],
                 cwd=repo_path,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
+                check=False,
             )
-            log.debug(f"git bundle create return code: {proc.returncode}")
+            log.debug("git bundle create return code: %d", proc.returncode)
             if proc.returncode:
                 return proc.returncode.to_bytes(1, "big") + proc.stderr
 
@@ -234,7 +237,7 @@ def on_push_request(
         if err is not None:
             return b"\1" + err.encode()
 
-        assert res is not None
+        assert res is not None  # nosec B101
         repo_path, data = res
 
         info, data = data.split(b"\n", maxsplit=1)
@@ -249,17 +252,18 @@ def on_push_request(
             with open(bundle, "wb") as f:
                 _ = f.write(data)
 
-            proc = subprocess.run(
+            proc = subprocess.run(  # nosec B607 B603
                 ["git", "bundle", "verify", bundle],
                 cwd=repo_path,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
+                check=False,
             )
-            log.debug(f"git bundle verifyreturn code: {proc.returncode}")
+            log.debug("git bundle verifyreturn code: %d", proc.returncode)
             if proc.returncode:
                 return proc.returncode.to_bytes(1, "big") + proc.stderr
 
-            proc = subprocess.run(
+            proc = subprocess.run(  # nosec B607 B603
                 [
                     "git",
                     "fetch",
@@ -270,8 +274,9 @@ def on_push_request(
                 cwd=repo_path,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
+                check=False,
             )
-            log.debug(f"git bundle unbundle return code: {proc.returncode}")
+            log.debug("git bundle unbundle return code: %d", proc.returncode)
 
         return proc.returncode.to_bytes(1, "big") + proc.stderr
 
@@ -296,19 +301,20 @@ def on_delete_request(
         if err is not None:
             return b"\1" + err.encode()
 
-        assert res is not None
+        assert res is not None  # nosec B101
         repo_path, data = res
 
         ref = data
         log_request(path, repo_path, data)
 
-        proc = subprocess.run(
+        proc = subprocess.run(  # nosec B607 B603
             ["git", "update-ref", "-d", ref],
             cwd=repo_path,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            check=False,
         )
-        log.debug(f"git update-ref return code: {proc.returncode}")
+        log.debug("git update-ref return code: %d", proc.returncode)
         return b"\0" + proc.stderr
 
     except Exception as e:
@@ -316,7 +322,7 @@ def on_delete_request(
         return b"\1" + str(e).encode()
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
     parser = argparse.ArgumentParser(description="RNS Git Server", allow_abbrev=False)
     _ = parser.add_argument("repo", help="Path to git repository to serve")
     _ = parser.add_argument(
@@ -386,16 +392,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     assert isinstance(args.announce_interval, int | None)  # pyright: ignore[reportAny] # nosec B101
     announce_interval = args.announce_interval
 
-    assert isinstance(args.allow_read, list)  # pyright: ignore[reportAny]
-    assert all(x for x in args.allow_read if isinstance(x, str))  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+    assert isinstance(args.allow_read, list)  # pyright: ignore[reportAny]# nosec B101
+    assert all(x for x in args.allow_read if isinstance(x, str))  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]# nosec B101
     read_list = set(cast(list[str], args.allow_read))
 
     for allow in read_list:
         if not is_valid_hexhash(allow):
             raise ValueError(f"Invalid read hexhash: {allow}")
 
-    assert isinstance(args.allow_write, list)  # pyright: ignore[reportAny]
-    assert all(x for x in args.allow_write if isinstance(x, str))  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+    assert isinstance(args.allow_write, list)  # pyright: ignore[reportAny] # nosec B101
+    assert all(x for x in args.allow_write if isinstance(x, str))  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType] # nosec B101
     write_list = set(cast(list[str], args.allow_write))
 
     global _write_list
@@ -413,12 +419,12 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     _ = RNS.Reticulum(config_path, RNS.LOG_VERBOSE if verbose else RNS.LOG_WARNING)
 
-    assert RNS.Reticulum.configdir is not None  # pyright: ignore[reportUnknownMemberType]
+    assert RNS.Reticulum.configdir is not None  # pyright: ignore[reportUnknownMemberType] # nosec B101
     if identity_path is None:
         identity_path = os.path.join(RNS.Reticulum.configdir, "identity")  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
 
-    assert identity_path is not None
-    log.info(f"Identity: {identity_path}")
+    assert identity_path is not None  # nosec B101
+    log.info("Identity: %s", identity_path)
     identity: RNS.Identity | None = None
     if os.path.exists(identity_path):
         identity = RNS.Identity.from_file(identity_path)  # pyright: ignore[reportUnknownMemberType]
@@ -427,7 +433,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         identity = RNS.Identity(True)
         _ = identity.to_file(identity_path)  # pyright: ignore[reportUnknownMemberType]
 
-    assert identity is not None
+    assert identity is not None  # nosec B101
     assert identity.hexhash is not None  # nosec B101
 
     server_destination = RNS.Destination(

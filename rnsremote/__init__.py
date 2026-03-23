@@ -1,6 +1,6 @@
 from importlib.metadata import (
-    version,
     PackageNotFoundError,
+    version,
 )
 
 try:
