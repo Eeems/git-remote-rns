@@ -16,7 +16,12 @@ RETICULUM_CONFIG = """
 [interfaces]
   [[AutoInterface]]
     type = AutoInterface
-    enabled = yes
+    enabled = no
+
+  [[Dummy]]
+    type = BackboneInterface
+    enable = yes
+    listen_on = 127.0.0.2
 """
 
 
@@ -54,7 +59,6 @@ def _run_stack(tmp_path: Path, stdin: str) -> str:
     rns_config: Path = rns_config_dir / "config"
     _ = rns_config.write_text(RETICULUM_CONFIG)
 
-    identity_file: Path = tmp_path / "identity"
     workdir: Path = pathlib.Path.cwd()
 
     rnsd_proc: subprocess.Popen[str] = subprocess.Popen(
@@ -110,12 +114,12 @@ def _run_stack(tmp_path: Path, stdin: str) -> str:
         [
             rngit_bin,
             str(repo_dir),
+            "--verbose",
             "--config",
             str(rns_config_dir),
-            "--save-identity",
-            str(identity_file),
             "--announce-interval",
             "1",
+            "--allow-all-read",
         ],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -141,9 +145,10 @@ def _run_stack(tmp_path: Path, stdin: str) -> str:
                     break
 
                 print(f"SERVER: {line.rstrip()}")
-                match = re.search(r"Server destination hash:\s*([a-f0-9]+)", line)
+                match = re.search(r"\[INFO\] Destination: <([a-f0-9]+)>", line)
                 if match:
                     dest_hash = match.group(1)
+                    print(f"Destination: {dest_hash}")
                     break
 
                 if "error" in line.lower():
@@ -168,7 +173,7 @@ def _run_stack(tmp_path: Path, stdin: str) -> str:
 
         try:
             result = subprocess.run(
-                [git_remote_rns_bin, "origin", f"rns::{dest_hash}"],
+                [git_remote_rns_bin, "origin", dest_hash],
                 env={**os.environ, "RNS_CONFIG_PATH": str(rns_config_dir)},
                 input=stdin,
                 capture_output=True,
@@ -197,7 +202,7 @@ def _run_stack(tmp_path: Path, stdin: str) -> str:
             return output
 
         except subprocess.TimeoutExpired as e:
-            print(f"Client timed out!")
+            print("Client timed out!")
             print(f"stdout: {e.stdout}")
             print(f"stderr: {e.stderr}")
             raise
@@ -223,7 +228,9 @@ def _run_stack(tmp_path: Path, stdin: str) -> str:
 class TestEndToEnd:
     def test_capabilities(self, tmp_path: Path) -> None:
         output = _run_stack(tmp_path, "capabilities\n\n")
-        assert "connect" in output, f"Expected 'connect' capability, got: {output}"
+        assert "list" in output, f"'list' missing from capabilities: {output}"
+        assert "fetch" in output, f"'fetch' missing from capabilities: {output}"
+        assert "push" in output, f"'push' missing from capabilities: {output}"
 
     def test_list(self, tmp_path: Path) -> None:
         output = _run_stack(tmp_path, "list\n\n")
