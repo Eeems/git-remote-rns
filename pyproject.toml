@@ -1,6 +1,6 @@
 [project]
 name = "git-remote-rns"
-version = "0.1.0"
+version = "0.0.1"
 description = "Git remote helper for syncing repositories over Reticulum"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -12,15 +12,15 @@ dependencies = ["rns>=1.1.4", "lxmf>=0.9.4"]
 dev = ["pytest>=7.0", "prospector[with_everything]", 'basedpyright']
 
 [project.scripts]
-git-remote-rns = "rnsremote.__main__:client"
-rngit = "rnsremote.__main__:server"
+git-remote-rns = "rngit.__main__:client"
+rngit = "rngit.__main__:server"
 
 [build-system]
 requires = ["setuptools>=70.1", "nuitka>=4.0.6"]
 build-backend = "nuitka.distutils.Build"
 
 [tool.setuptools]
-packages = ["rnsremote"]
+packages = ["rngit"]
 
 [tool.ruff]
 exclude = [".venv", "typings", "build"]
