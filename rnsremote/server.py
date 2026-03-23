@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import functools
 import logging
 import os
 import shutil
@@ -149,7 +150,7 @@ def _serve_loop(  # noqa: PLR0913,PLR0912,too-many-positional-arguments
     _ = destination.announce()  # pyright: ignore[reportUnknownMemberType]
     log.debug("Destination announced")
     log.debug("Setting callback for link_established...")
-    destination.set_link_established_callback(handle_connection)  # pyright: ignore[reportUnknownMemberType]
+    destination.set_link_established_callback(functools.partial(handle_connection, repo_path))  # pyright: ignore[reportUnknownMemberType]
     log.debug("Callback set, now waiting for connections...")
 
     _wait_for_shutdown(log, destination, announce_interval)
@@ -188,9 +189,9 @@ def _wait_for_shutdown(
             raise
 
 
-def handle_connection(rns_link: RNS.Link):
+def handle_connection(repo_path: str, rns_link: RNS.Link):
     log = logging.getLogger(__name__)
-    link = ServerLink(rns_link, "")
+    link = ServerLink(rns_link, repo_path)
 
     try:
         if not link.wait_for_connect():
@@ -223,6 +224,7 @@ def handle_connection(rns_link: RNS.Link):
 
     except Exception as e:
         log.error("Error handling connection: %s", e)
+
     finally:
         link.close()
 

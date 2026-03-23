@@ -29,7 +29,9 @@ class TestEndToEnd:
         repo_dir: Path = tmp_path / "repo"
         repo_dir.mkdir()
 
-        _ = subprocess.run(["git", "init"], cwd=repo_dir, capture_output=True, check=True)
+        _ = subprocess.run(
+            ["git", "init"], cwd=repo_dir, capture_output=True, check=True
+        )
         with open(repo_dir / "test.txt", "w") as f:
             _ = f.write("hello")
         _ = subprocess.run(
@@ -44,7 +46,7 @@ class TestEndToEnd:
 
         rns_config: Path = rns_config_dir / "config"
         _ = rns_config.write_text(  # type: ignore[assignment]
-"""
+            """
 [reticulum]
   share_instance = Yes
 
@@ -52,7 +54,8 @@ class TestEndToEnd:
   [[AutoInterface]]
     type = AutoInterface
     enabled = yes
-""")
+"""
+        )
 
         identity_file: Path = tmp_path / "identity"
         workdir: Path = pathlib.Path.cwd()
@@ -169,7 +172,7 @@ class TestEndToEnd:
             result = subprocess.run(
                 [git_remote_rns_bin, "origin", f"rns::{dest_hash}"],
                 env={**os.environ, "RNS_CONFIG_PATH": str(rns_config_dir)},
-                input="capabilities\n\n",
+                input="capabilities\nlist\n\n",
                 capture_output=True,
                 text=True,
                 timeout=30,
@@ -185,6 +188,8 @@ class TestEndToEnd:
                 )
 
             assert "connect" in output, f"Expected 'connect' capability, got: {output}"
+            assert "refs/heads/main" in output, f"Expected refs/heads/main in output, got: {output}"
+            assert "HEAD" in output, f"Expected HEAD in output, got: {output}"
 
         finally:
             server_proc.terminate()
