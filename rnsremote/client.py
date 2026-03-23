@@ -12,7 +12,6 @@ import RNS  # type: ignore[import-untyped]
 from . import protocol
 from .connection import (
     Link,
-    APP_NAME,
     configure_logging,
 )
 
@@ -354,6 +353,8 @@ def _connect(
                 + f"after {timeout}s. Verify the server is running and the destination hash is correct."
             )
 
+    log.debug("Creating link...")
+
     server_identity = RNS.Identity.recall(destination_hash)  # pyright: ignore[reportUnknownMemberType]
     if server_identity is None:
         raise ValueError(
@@ -361,15 +362,22 @@ def _connect(
             + "The server may need to be restarted or the destination hash is incorrect."
         )
 
-    destination = RNS.Destination(
+    log.debug("Creating server destination...")
+
+    server_destination = RNS.Destination(
         server_identity,
         RNS.Destination.OUT,
         RNS.Destination.SINGLE,
-        APP_NAME,
-        destination_hexhash,
+        protocol.APP_NAME,
     )
 
+    log.debug("Creating link...")
+    link = RNS.Link(server_destination)
+
     log.debug("Connecting to %s...", destination_hexhash[:8])
-    client_link = ClientLink(None, destination_hexhash, repo_path)  # type: ignore[arg-type]
-    client_link.start(destination)
+    client_link = ClientLink(link, destination_hexhash, repo_path)
+
+    link.set_link_established_callback(client_link.on_link_established)  # pyright: ignore[reportUnknownMemberType]
+    link.set_link_closed_callback(client_link.on_link_closed)  # pyright: ignore[reportUnknownMemberType]
+
     return client_link

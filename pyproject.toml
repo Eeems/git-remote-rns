@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 authors = [{name = "Eeems"}]
-dependencies = ["rns>=1.0"]
+dependencies = ["rns>=1.1.4", "lxmf>=0.9.4"]
 
 [project.optional-dependencies]
 dev = ["pytest>=7.0", "prospector[with_everything]", 'basedpyright']
@@ -27,6 +27,7 @@ exclude = [".venv", "typings", "build"]
 
 [tool.pyright]
 exclude = [".venv/**", "typings/**", "build/**"]
+reportMissingTypeStubs = false
 
 [tool.pylint."messages control"]
 disable = [
@@ -34,7 +35,7 @@ disable = [
 	"invalid-name",
 	"global-statement",
 	"broad-exception-caught",
-	"too-many-statements"
+	"too-many-statements",
 ]
 
 [tool.bandit]

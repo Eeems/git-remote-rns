@@ -15,11 +15,10 @@ __all__ = [
     "save_identity",
     "load_identity",
     "configure_logging",
-    "APP_NAME",
 ]
 
 
-APP_NAME = protocol.APP_NAME
+log = logging.getLogger(__name__)
 
 
 def configure_logging(verbose: bool = False, level: int | None = None):
@@ -64,10 +63,17 @@ class Link:
 
     def send(self, data: bytes):
         if self._link is not None:
-            self._link.send(data)  # pyright: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
+            packet = RNS.Packet(self._link, data)
+            send_result = packet.send()
+            _ = send_result
 
     def receive(self, timeout: float | None = None) -> bytes | None:
-        return None if self._link is None else self._link.receive(timeout)  # pyright: ignore[reportUnknownVariableType, reportUnknownMemberType]
+        if self._link is None:
+            return None
+        data = self._link.receive(timeout)  # pyright: ignore[reportUnknownVariableType, reportUnknownMemberType]
+        if data is None:
+            return None
+        return bytes(data)  # pyright: ignore[reportUnknownArgumentType]
 
     def close(self):
         if self._link is not None:
@@ -84,27 +90,22 @@ def create_server_destination(
     identity: RNS.Identity,
     destination_hexhash: str | None = None,
 ) -> RNS.Destination:
-    if destination_hexhash is None:
-        hexhash = identity.hexhash
-        if hexhash is None:
-            raise ValueError("Identity has no hash")
-
-        hash_str = hexhash
-
-    else:
-        hash_str = destination_hexhash
-
-    dest_len = (RNS.Reticulum.TRUNCATED_HASHLENGTH // 8) * 2
-    if len(hash_str) != dest_len:
-        raise ValueError(f"Destination hash must be {dest_len} hex characters")
-
     destination = RNS.Destination(
         identity,
         RNS.Destination.IN,
         RNS.Destination.SINGLE,
-        APP_NAME,
-        hash_str,
+        protocol.APP_NAME,
     )
+
+    if destination_hexhash is not None:
+        expected_hash: str = destination.hexhash  # pyright: ignore[reportAny]
+        if expected_hash != destination_hexhash:
+            log.warning(
+                "Destination hash mismatch: computed %s, requested %s",
+                str(expected_hash),
+                str(destination_hexhash),
+            )
+
     return destination
 
 
