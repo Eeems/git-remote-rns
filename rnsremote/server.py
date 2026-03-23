@@ -97,6 +97,24 @@ def request_repo_path(data: bytes) -> tuple[str | None, tuple[str, bytes] | None
         if not os.path.isdir(repo_path):
             return "Path is not directory", None
 
+        proc = subprocess.run(
+            ["git", "rev-parse", "--git-dir"],
+            cwd=repo_path,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        if proc.returncode:
+            return (
+                proc.stderr.rstrip().decode()
+                or proc.stdout.rstrip().decode()
+                or "Unknown error",
+                None,
+            )
+
+        git_dir = proc.stdout.rstrip().decode()
+        if git_dir not in (".", ".git"):
+            return "Path not a valid repository", None
+
         return (None, (repo_path, b"" if len(parts) == 1 else parts[1]))
 
     except Exception as e:
