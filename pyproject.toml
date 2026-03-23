@@ -36,6 +36,9 @@ disable = [
 	"global-statement",
 	"broad-exception-caught",
 	"too-many-statements",
+	"too-many-return-statements",
+	"too-many-branches",
+	"too-many-locals"
 ]
 
 [tool.bandit]

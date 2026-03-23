@@ -1,10 +1,9 @@
 import logging
 import string
 import sys
+from enum import Enum
 
 import RNS
-
-from enum import Enum
 
 APP_NAME = "git"
 EXPECTED_HEXHASH_LENGTH = (RNS.Reticulum.TRUNCATED_HASHLENGTH // 8) * 2
@@ -19,7 +18,9 @@ def configure_logging(level: int = logging.WARNING):
         logging.root.removeHandler(logging.root.handlers[0])
 
     logging.basicConfig(
-        level=level, format="%(asctime)s [%(levelname)s] %(message)s", stream=sys.stderr
+        level=level,
+        format="%(asctime)s [%(levelname)s] %(message)s",
+        stream=sys.stderr,
     )
 
 

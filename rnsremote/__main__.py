@@ -10,3 +10,6 @@ def client():
 
 def server():
     sys.exit(_server())
+
+
+__all__ = ["client", "server"]

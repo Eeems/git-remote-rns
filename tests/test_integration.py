@@ -1,13 +1,13 @@
-import pytest
 import os
-import subprocess
-import time
-import shutil
-import re
-import sys
 import pathlib
-
+import re
+import shutil
+import subprocess
+import sys
+import time
 from pathlib import Path
+
+import pytest
 
 RETICULUM_CONFIG = """
 [reticulum]
@@ -182,7 +182,11 @@ def _run_stack(tmp_path: Path, stdin: str) -> str:
             if result.returncode != 0:
                 print(f"Client exit code: {result.returncode}")
 
-            if "timeout" in output.lower() or "failed to connect" in output.lower() or "error" in output.lower():
+            if (
+                "timeout" in output.lower()
+                or "failed to connect" in output.lower()
+                or "error" in output.lower()
+            ):
                 print(f"Client output: {output[:500]}")
                 assert False, (
                     "Client failed to connect to server. "

@@ -1,22 +1,21 @@
+import argparse
 import logging
 import os
-import sys
-import argparse
-import threading
-import subprocess
-import traceback
 import signal
+import subprocess  # noqa: B404
+import sys
+import threading
+import traceback
+from collections.abc import Sequence
+from tempfile import TemporaryDirectory
+from typing import cast
 
 import RNS
 
-from collections.abc import Sequence
-from typing import cast
-from tempfile import TemporaryDirectory
-
 from . import __version__
 from .shared import (
-    configure_logging,
     APP_NAME,
+    configure_logging,
     is_valid_hexhash,
     packets,
 )
@@ -33,21 +32,21 @@ _repo_path: str | None = None
 
 
 def on_link_established(link: RNS.Link):
-    global _identity
-    assert _identity is not None
-    log.debug(f"ESTABLISHED: {link}")
+    global _identity  # pylint: disable=W0602 # noqa: F999
+    assert _identity is not None  # nosec B101
+    log.debug("ESTABLISHED: %s", link)
     link.set_packet_callback(on_packet)  # pyright: ignore[reportUnknownMemberType]
     _ = link.identify(_identity)  # pyright: ignore[reportUnknownMemberType]
 
 
 def on_link_closed(link: RNS.Link):
-    global _linkEvent
-    log.debug(f"CLOSED: {link}")
+    global _linkEvent  # pylint: disable=W0602 # noqa: F999
+    log.debug("CLOSED: %s", link)
     _linkEvent.clear()
 
 
 def on_packet(message: bytes, _packet: RNS.Packet):
-    global _linkEvent
+    global _linkEvent  # pylint: disable=W0602 # noqa: F999
     log.debug("PACKET: %s", message)
     match message:
         case packets.PACKET_IDENTIFIED.value:
@@ -60,8 +59,8 @@ def on_packet(message: bytes, _packet: RNS.Packet):
 def request(
     link: RNS.Link, path: str, data: bytes = b""
 ) -> tuple[str | None, bytes | None]:
-    global _repo_path
-    assert _repo_path is not None
+    global _repo_path  # pylint: disable=W0602 # noqa: F999
+    assert _repo_path is not None  # nosec B101
     event = threading.Event()
     log.debug("REQUEST %s", path)
     receipt = link.request(  # pyright: ignore[reportUnknownMemberType]
@@ -79,8 +78,8 @@ def request(
             return "Failed to send request", None
 
         case RNS.RequestReceipt.READY:
-            data = receipt.get_response()  # pyright: ignore[reportUnknownVariableType]
-            assert isinstance(data, bytes)
+            data = receipt.get_response()  # pyright: ignore[reportUnknownVariableType, reportAssignmentType]
+            assert isinstance(data, bytes)  # nosec B101
             returncode = int.from_bytes(data[0:1], "big")
             if returncode:
                 return "Remote error: " + data[1:].decode(), None
@@ -91,7 +90,7 @@ def request(
             return f"Invalid status: {receipt.get_status()}", None
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
     parser = argparse.ArgumentParser(prog="git-remote-rns")
     _ = parser.add_argument("remote", help="Remote name (ignored)")
     _ = parser.add_argument("url", help="Remote URL (<hash>[/path])")
@@ -122,7 +121,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parts = url.split("/", 1)
     destination_hexhash = parts[0]
     if not is_valid_hexhash(destination_hexhash):
-        log.error(f"error: Invalid URL. Hexhash invalid: {destination_hexhash}")
+        log.error("error: Invalid URL. Hexhash invalid: %s", destination_hexhash)
         return 1
 
     destination = bytes.fromhex(destination_hexhash)
@@ -133,13 +132,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     config_path = os.environ.get("RNS_CONFIG_PATH", None)
     _ = RNS.Reticulum(config_path, RNS.LOG_VERBOSE if verbose else RNS.LOG_WARNING)
 
-    assert RNS.Reticulum.configdir is not None  # pyright: ignore[reportUnknownMemberType]
+    assert RNS.Reticulum.configdir is not None  # pyright: ignore[reportUnknownMemberType] # nosec B101
     if identity_path is None:
         identity_path = os.path.join(RNS.Reticulum.configdir, "identity")  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
 
-    assert identity_path is not None
-    log.info(f"Identity: {identity_path}")
-    log.info(f"Destination: {destination_hexhash}")
+    assert identity_path is not None  # nosec B101
+    log.info("Identity: %s", identity_path)
+    log.info("Destination: %s", destination_hexhash)
     identity: RNS.Identity | None = None
     if os.path.exists(identity_path):
         identity = RNS.Identity.from_file(identity_path)  # pyright: ignore[reportUnknownMemberType]
@@ -170,17 +169,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     link = RNS.Link(server_destination, on_link_established, on_link_closed)
     push_queue: list[tuple[str, str]] = []
-    global _linkEvent
-    try:
+    global _linkEvent  # pylint: disable=W0602 # noqa: F999
+    try:  # pylint: disable=too-many-nested-blocks
         for line in sys.stdin:
             _ = _linkEvent.wait()
             if not line:
                 continue
 
-            log.debug(f"STDIN '{line.rstrip()}'")
+            log.debug("STDIN '%s'", line.rstrip())
 
             parts = cast(list[str], line.split(maxsplit=1))
-            assert isinstance(parts, list)
+            assert isinstance(parts, list)  # nosec B101
             if not parts:
                 log.debug("\\n")
                 while push_queue:
@@ -208,7 +207,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     else:
                         with TemporaryDirectory() as tmpdir:
                             bundle = os.path.join(tmpdir, "bundle")
-                            _ = subprocess.check_call(
+                            _ = subprocess.check_call(  # nosec B607 B603
                                 [
                                     "git",
                                     "bundle",
@@ -258,7 +257,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
                 case "fetch":
                     sha, ref = parts[1].rstrip().split(" ", maxsplit=1)
-                    log.debug(f"FETCH {sha} {ref}")
+                    log.debug("FETCH %s %s", sha, ref)
                     err, data = request(link, "fetch", f"{sha} {ref}".encode())
                     if err is not None:
                         _ = sys.stderr.write(err)
@@ -266,24 +265,24 @@ def main(argv: Sequence[str] | None = None) -> int:
                         _ = sys.stderr.flush()
                         return 1
 
-                    assert data is not None
+                    assert data is not None  # nosec B101
                     with TemporaryDirectory() as tmpdir:
                         bundle = os.path.join(tmpdir, f"{sha}.bundle")
                         with open(bundle, "wb") as f:
                             _ = f.write(data)
 
-                        _ = subprocess.check_call(
+                        _ = subprocess.check_call(  # nosec B607 B603
                             ["git", "bundle", "verify", bundle],
                             stdout=subprocess.DEVNULL,
                         )
-                        _ = subprocess.check_call(
+                        _ = subprocess.check_call(  # nosec B607 B603
                             ["git", "bundle", "unbundle", "--progress", bundle, ref],
                             stdout=subprocess.DEVNULL,
                         )
 
                 case "push":
                     local_ref, remote_ref = parts[1].rstrip().split(":", maxsplit=1)
-                    log.debug(f"PUSH {local_ref} {remote_ref}")
+                    log.debug("PUSH %s %s", local_ref, remote_ref)
                     push_queue.append((local_ref, remote_ref))
 
                 case "list":
@@ -299,7 +298,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                         _ = sys.stderr.flush()
                         return 1
 
-                    assert data is not None
+                    assert data is not None  # nosec B101
                     _ = sys.stdout.buffer.write(data)
                     _ = sys.stdout.write("\n")
                     _ = sys.stdout.flush()
