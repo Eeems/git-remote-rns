@@ -48,7 +48,21 @@ def on_list_request(
     log.debug(f"REQUEST {path}")
     global _repo_path
     assert _repo_path is not None
-    return subprocess.check_output(["git", "refs", "list"], text=False, cwd=_repo_path)
+    head_path = os.path.join(_repo_path, ".git", "HEAD")
+    if not os.path.exists(head_path):
+        head_path = os.path.join(_repo_path, "HEAD")
+
+    with open(head_path, "r") as f:
+        ref = f.read()[5:].rstrip()
+
+    return (
+        subprocess.check_output(
+            ["git", "refs", "list", "--format", "%(objectname) %(refname)"],
+            text=False,
+            cwd=_repo_path,
+        )
+        + f"@{ref} HEAD\n".encode()
+    )
 
 
 def on_fetch_request(
@@ -58,13 +72,15 @@ def on_fetch_request(
     _link_id: RNS.Identity,
     _remote_identity: RNS.Identity,
 ) -> bytes | None:
-    log.debug(f"REQUEST {path}")
     global _repo_path
     assert _repo_path is not None
     sha, ref = data.decode().split(" ", maxsplit=1)
+    log.debug(f"REQUEST {path} {sha} {ref}")
     with TemporaryDirectory() as tmpdir:
         bundle = os.path.join(tmpdir, f"{sha}.bundle")
-        _ = subprocess.check_call(["git", "bundle", "create", bundle, ref])
+        _ = subprocess.check_call(
+            ["git", "bundle", "create", bundle, ref], cwd=_repo_path
+        )
         with open(bundle, "rb") as f:
             return f.read()
 

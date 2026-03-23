@@ -4,6 +4,8 @@ import sys
 import argparse
 import threading
 import subprocess
+import traceback
+import signal
 
 import RNS
 
@@ -24,13 +26,19 @@ __all__ = [
 
 log: logging.Logger = logging.getLogger(__name__)
 
+_linkEvent: threading.Event = threading.Event()
+
 
 def on_link_established(link: RNS.Link):
+    global _linkEvent
     log.debug(f"ESTABLISHED: {link}")
+    _linkEvent.set()
 
 
 def on_link_closed(link: RNS.Link):
+    global _linkEvent
     log.debug(f"CLOSED: {link}")
+    _linkEvent.clear()
 
 
 def request(
@@ -61,6 +69,7 @@ def request(
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    global _linkEvent
     parser = argparse.ArgumentParser(prog="git-remote-rns")
     _ = parser.add_argument("remote", help="Remote name (ignored)")
     _ = parser.add_argument("url", help="Remote URL (<hash>[/path])")
@@ -136,52 +145,24 @@ def main(argv: Sequence[str] | None = None) -> int:
     link = RNS.Link(server_destination, on_link_established, on_link_closed)
     try:
         for line in sys.stdin:
+            _ = _linkEvent.wait()
             if not line:
                 continue
 
-            log.debug(f"STDIN {line}")
+            log.debug(f"STDIN '{line.rstrip()}'")
 
-            parts = line.split(maxsplit=1)
-            mode: str = cast(str, "")  # workaround type checking bug
-            queue: list[str] = []
+            parts = cast(list[str], line.split(maxsplit=1))
+            assert isinstance(parts, list)
             if not parts:
                 log.debug("\\n")
-                match mode:
-                    case "fetch":
-                        for line in queue:
-                            sha, ref = line.split(" ", maxsplit=1)
-                            err, data = request(link, "fetch", line.encode())
-                            if err is not None:
-                                _ = sys.stderr.write(err)
-                                _ = sys.stderr.write("\n")
-                                _ = sys.stderr.flush()
-                                return 1
-
-                            assert data is not None
-                            with TemporaryDirectory() as tmpdir:
-                                bundle = os.path.join(tmpdir, f"{sha}.bundle")
-                                with open(bundle, "wb") as f:
-                                    _ = f.write(data)
-
-                                _ = subprocess.check_call(
-                                    ["git", "bundle", "unbundle", bundle, ref]
-                                )
-
-                    case "push":
-                        for line in queue:
-                            # local_ref, remote_ref = line.split(":", maxsplit=1)
-                            pass
-
-                    case "":
-                        pass
-
-                    case _:
-                        _ = sys.stderr.write(f"Unknown mode: {mode}\n")
-                        _ = sys.stderr.flush()
-                        return 1
-
                 _ = sys.stdout.write("\n")
-                _ = sys.stdout.flush()
+                try:
+                    _ = sys.stdout.flush()
+
+                except BrokenPipeError:
+                    # Ignoring as git likes to close stdout early
+                    pass
+
                 continue
 
             match parts[0]:
@@ -194,20 +175,29 @@ def main(argv: Sequence[str] | None = None) -> int:
                     _ = sys.stdout.flush()
 
                 case "fetch":
-                    log.debug("FETCH")
-                    if mode != "fetch":
-                        queue.clear()
+                    sha, ref = parts[1].rstrip().split(" ", maxsplit=1)
+                    log.debug(f"FETCH {sha} {ref}")
+                    err, data = request(link, "fetch", f"{sha} {ref}".encode())
+                    if err is not None:
+                        _ = sys.stderr.write(err)
+                        _ = sys.stderr.write("\n")
+                        _ = sys.stderr.flush()
+                        return 1
 
-                    mode = "fetch"
-                    queue.append(parts[1].rstrip())
+                    assert data is not None
+                    with TemporaryDirectory() as tmpdir:
+                        bundle = os.path.join(tmpdir, f"{sha}.bundle")
+                        with open(bundle, "wb") as f:
+                            _ = f.write(data)
+
+                        _ = subprocess.check_call(
+                            ["git", "bundle", "unbundle", bundle, ref],
+                            stdout=subprocess.DEVNULL,
+                        )
 
                 case "push":
-                    log.debug("PUSH")
-                    if mode != "push":
-                        queue.clear()
-
-                    mode = "push"
-                    queue.append(parts[1].rstrip())
+                    local_ref, remote_ref = parts[1].rstrip().split(":", maxsplit=1)
+                    log.debug(f"PUSH {local_ref} {remote_ref}")
 
                 case "list":
                     log.debug("LIST")
@@ -228,7 +218,15 @@ def main(argv: Sequence[str] | None = None) -> int:
                     _ = sys.stderr.flush()
                     return 1
 
+        log.debug("End of stdin")
+        _ = signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+
+    except Exception:
+        log.error(traceback.format_exc())
+        return 1
+
     finally:
+        log.debug("Closing link")
         link.teardown()
 
     return 0
