@@ -101,7 +101,7 @@ def main():
     destination_hash = parts[0]
     repo_path = parts[1] if len(parts) > 1 else ""
 
-    config_path = os.environ.get("CONFIG_PATH", os.path.expanduser("~/.reticulum"))
+    config_path = os.environ.get("RNS_CONFIG_PATH", None)
     try:
         _ = RNS.Reticulum(config_path, RNS.LOG_VERBOSE if verbose else RNS.LOG_WARNING)
         _run_helper(log, destination_hash, repo_path)
