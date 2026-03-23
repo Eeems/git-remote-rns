@@ -25,7 +25,7 @@ __all__ = [
 log: logging.Logger = logging.getLogger(__name__)
 _repo_path: str | None = None
 _write_list: set[str] = set()
-_read_list: set[str] = set()
+_read_list: set[str] | None = set()
 
 
 def on_link_closed(link: RNS.Link):
@@ -68,6 +68,9 @@ def identity_allowed_error(
 
 def read_allowed_error(identity: RNS.Identity | None) -> str | None:
     global _read_list  # pylint: disable=W0602 # noqa: F999
+    if _read_list is None:
+        return None
+
     return identity_allowed_error(identity, _read_list)
 
 
@@ -365,6 +368,13 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
         help="Identities allowed to read the repository",
         dest="allow_read",
     )
+    _ = parser.add_argument(
+        "-A",
+        "--allow-all-read",
+        action="store_true",
+        dest="allow_all_read",
+        help="Allow any connection to read the repository",
+    )
     args = parser.parse_args(argv)
 
     assert isinstance(args.repo, str)  # pyright: ignore[reportAny] # nosec B101
@@ -392,6 +402,9 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
     assert isinstance(args.announce_interval, int | None)  # pyright: ignore[reportAny] # nosec B101
     announce_interval = args.announce_interval
 
+    assert isinstance(args.allow_all_read, bool)  # pyright: ignore[reportAny] # nosec B101
+    allow_all_read = args.allow_all_read
+
     assert isinstance(args.allow_read, list)  # pyright: ignore[reportAny]# nosec B101
     assert all(x for x in args.allow_read if isinstance(x, str))  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]# nosec B101
     read_list = set(cast(list[str], args.allow_read))
@@ -400,20 +413,26 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
         if not is_valid_hexhash(allow):
             raise ValueError(f"Invalid read hexhash: {allow}")
 
+    if allow_all_read and read_list:
+        raise ValueError(
+            "--allow-read and --allow-all-read cannot be used at the same time"
+        )
+
     assert isinstance(args.allow_write, list)  # pyright: ignore[reportAny] # nosec B101
     assert all(x for x in args.allow_write if isinstance(x, str))  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType] # nosec B101
     write_list = set(cast(list[str], args.allow_write))
 
     global _write_list
     _write_list = write_list
-    global _read_list
-    _read_list = read_list
 
     for allow in write_list:
         if not is_valid_hexhash(allow):
             raise ValueError(f"Invalid write hexhash: {allow}")
 
     read_list |= write_list
+
+    global _read_list
+    _read_list = None if allow_all_read else read_list
 
     configure_logging(logging.DEBUG if verbose else logging.WARNING)
 
@@ -444,7 +463,7 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
     )
 
     log.info("Destination: %s", RNS.prettyhexrep(server_destination.hash))  # pyright: ignore[reportUnknownMemberType]
-    log.info("Read list: %s", read_list)
+    log.info("Read list: %s", "(any)" if allow_all_read else read_list)
     log.info("Write list: %s", write_list)
     allow_list = (bytes.fromhex(x) for x in read_list)
     server_destination.register_request_handler(  # pyright: ignore[reportUnknownMemberType]
