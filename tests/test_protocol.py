@@ -37,7 +37,7 @@ class TestHandshakePacket:
     def test_invalid_version(self):
         packet = HandshakePacket(256, "/repo")
         with pytest.raises(ValueError):
-            packet.serialize()
+            _ = packet.serialize()
 
 
 class TestRefListPacket:
@@ -65,7 +65,7 @@ class TestRefListPacket:
         data = packet.serialize()
         corrupted_data = data + b"\nsingleword\n"
         with pytest.raises(ValueError, match="Malformed ref line"):
-            parse_packet(corrupted_data)
+            _ = parse_packet(corrupted_data)
 
 
 class TestPackPacket:
@@ -100,7 +100,7 @@ class TestDonePacket:
         packet = DonePacket()
         data = packet.serialize() + b"extra"
         with pytest.raises(ValueError, match="no payload"):
-            parse_packet(data)
+            _ = parse_packet(data)
 
 
 class TestWantPacket:
@@ -150,7 +150,7 @@ class TestErrorPacket:
 class TestParsePacket:
     def test_empty_data_raises(self):
         with pytest.raises(ValueError, match="Empty packet data"):
-            parse_packet(b"")
+            _ = parse_packet(b"")
 
     def test_handshake_packet_type(self):
         packet = HandshakePacket(1, "/test")
@@ -178,4 +178,4 @@ class TestPacketBase:
 
     def test_deserialize_empty_raises(self):
         with pytest.raises(ValueError, match="Empty packet data"):
-            Packet.deserialize(b"")
+            _ = Packet.deserialize(b"")

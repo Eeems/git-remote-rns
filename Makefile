@@ -36,7 +36,12 @@ clean:
 	find . -type f -name "*.pyc" -delete 2>/dev/null || true
 
 lint: install-dev
-	@source ${VENV_ACTIVATE}; \
+	@set -e;\
+	source ${VENV_ACTIVATE}; \
+	python -m basedpyright \
+	  --warnings \
+	  rnsremote \
+	  tests; \
 	python -m prospector \
 	  --profile strictness_veryhigh \
 	  --with-tool pyroma \

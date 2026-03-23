@@ -147,17 +147,10 @@ def _serve_loop(  # noqa: PLR0913,PLR0912,too-many-positional-arguments
 
     log.debug("Announcing destination...")
     _ = destination.announce()  # pyright: ignore[reportUnknownMemberType]
-
-    def on_link_established(link: RNS.Link):
-        log.debug("Client connected")
-        server_link = ServerLink(link, repo_path)
-        threading.Thread(
-            target=handle_connection,
-            args=(server_link,),
-            daemon=True,
-        ).start()
-
-    destination.set_link_established_callback(on_link_established)  # pyright: ignore[reportUnknownMemberType]
+    log.debug("Destination announced")
+    log.debug("Setting callback for link_established...")
+    destination.set_link_established_callback(handle_connection)  # pyright: ignore[reportUnknownMemberType]
+    log.debug("Callback set, now waiting for connections...")
 
     _wait_for_shutdown(log, destination, announce_interval)
 
