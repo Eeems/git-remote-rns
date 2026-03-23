@@ -45,24 +45,32 @@ def on_list_request(
     _link_id: RNS.Identity,
     _remote_identity: RNS.Identity,
 ) -> bytes | None:
-    log.debug(f"REQUEST {path}")
-    global _repo_path
-    assert _repo_path is not None
-    head_path = os.path.join(_repo_path, ".git", "HEAD")
-    if not os.path.exists(head_path):
-        head_path = os.path.join(_repo_path, "HEAD")
+    try:
+        log.debug(f"REQUEST {path}")
+        global _repo_path
+        assert _repo_path is not None
+        head_path = os.path.join(_repo_path, ".git", "HEAD")
+        if not os.path.exists(head_path):
+            head_path = os.path.join(_repo_path, "HEAD")
 
-    with open(head_path, "r") as f:
-        ref = f.read()[5:].rstrip()
+        with open(head_path, "r") as f:
+            ref = f.read()[5:].rstrip()
 
-    return (
-        subprocess.check_output(
+        proc = subprocess.run(
             ["git", "refs", "list", "--format", "%(objectname) %(refname)"],
             text=False,
             cwd=_repo_path,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
         )
-        + f"@{ref} HEAD\n".encode()
-    )
+        log.debug(f"git refs list code: {proc.returncode}")
+        if proc.returncode:
+            return proc.returncode.to_bytes(1, "big") + proc.stderr
+
+        return b"\0" + proc.stdout + f"@{ref} HEAD\n".encode()
+
+    except Exception:
+        return b"\1" + traceback.format_exc().encode()
 
 
 def on_fetch_request(
@@ -72,17 +80,108 @@ def on_fetch_request(
     _link_id: RNS.Identity,
     _remote_identity: RNS.Identity,
 ) -> bytes | None:
-    global _repo_path
-    assert _repo_path is not None
-    sha, ref = data.decode().split(" ", maxsplit=1)
-    log.debug(f"REQUEST {path} {sha} {ref}")
-    with TemporaryDirectory() as tmpdir:
-        bundle = os.path.join(tmpdir, f"{sha}.bundle")
-        _ = subprocess.check_call(
-            ["git", "bundle", "create", bundle, ref], cwd=_repo_path
+    try:
+        global _repo_path
+        assert _repo_path is not None
+        sha, ref = data.decode().split(" ", maxsplit=1)
+        log.debug(f"REQUEST {path} {sha} {ref}")
+        with TemporaryDirectory() as tmpdir:
+            bundle = os.path.join(tmpdir, f"{sha}.bundle")
+            proc = subprocess.run(
+                ["git", "bundle", "create", "--no-progress", bundle, ref],
+                cwd=_repo_path,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            log.debug(f"git bundle create return code: {proc.returncode}")
+            if proc.returncode:
+                return proc.returncode.to_bytes(1, "big") + proc.stderr
+
+            with open(bundle, "rb") as f:
+                return b"\0" + f.read()
+
+    except Exception:
+        return b"\1" + traceback.format_exc().encode()
+
+
+def on_push_request(
+    path: str,
+    data: bytes,
+    _request_id: bytes,
+    _link_id: RNS.Identity,
+    _remote_identity: RNS.Identity,
+) -> bytes | None:
+    try:
+        global _repo_path
+        assert _repo_path is not None
+        info, data = data.split(b"\n", maxsplit=1)
+        local_ref, remote_ref = info.decode().split(":", maxsplit=1)
+        force = local_ref.startswith("+")
+        if force:
+            local_ref = local_ref[1:]
+
+        log.debug(
+            f"REQUEST {path} {'(force) ' if force else ''}{local_ref} {remote_ref}"
         )
-        with open(bundle, "rb") as f:
-            return f.read()
+        with TemporaryDirectory() as tmpdir:
+            bundle = os.path.join(tmpdir, "bundle")
+            with open(bundle, "wb") as f:
+                _ = f.write(data)
+
+            proc = subprocess.run(
+                ["git", "bundle", "verify", bundle],
+                cwd=_repo_path,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            log.debug(f"git bundle verifyreturn code: {proc.returncode}")
+            if proc.returncode:
+                return proc.returncode.to_bytes(1, "big") + proc.stderr
+
+            proc = subprocess.run(
+                [
+                    "git",
+                    "fetch",
+                    bundle,
+                    f"{local_ref}:{remote_ref}",
+                    *(["--force"] if force else []),
+                ],
+                cwd=_repo_path,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            log.debug(f"git bundle unbundle return code: {proc.returncode}")
+
+        return proc.returncode.to_bytes(1, "big") + proc.stderr
+
+    except Exception:
+        return b"\1" + traceback.format_exc().encode()
+
+
+def on_delete_request(
+    path: str,
+    data: bytes,
+    _request_id: bytes,
+    _link_id: RNS.Identity,
+    _remote_identity: RNS.Identity,
+):
+    try:
+        global _repo_path
+        assert _repo_path is not None
+        ref = data
+        log.debug(f"REQUEST {path} {data}")
+
+        proc = subprocess.run(
+            ["git", "update-ref", "-d", ref],
+            cwd=_repo_path,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        log.debug(f"git update-ref return code: {proc.returncode}")
+        return b"\0" + proc.stderr
+
+    except Exception:
+        return b"\1" + traceback.format_exc().encode()
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -175,6 +274,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     server_destination.register_request_handler(  # pyright: ignore[reportUnknownMemberType]
         "fetch",
         on_fetch_request,
+        RNS.Destination.ALLOW_ALL,
+    )
+    server_destination.register_request_handler(  # pyright: ignore[reportUnknownMemberType]
+        "push",
+        on_push_request,
+        RNS.Destination.ALLOW_ALL,
+    )
+    server_destination.register_request_handler(  # pyright: ignore[reportUnknownMemberType]
+        "delete",
+        on_delete_request,
         RNS.Destination.ALLOW_ALL,
     )
     server_destination.set_link_established_callback(on_link_established)  # pyright: ignore[reportUnknownMemberType]
