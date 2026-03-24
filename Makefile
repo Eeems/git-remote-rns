@@ -1,4 +1,4 @@
-.PHONY: help install dev test clean review build wheel
+.PHONY: help install dev test clean review build wheel sdist
 
 VERSION := $(shell grep -m 1 version pyproject.toml | tr -s ' ' | tr -d '"' | tr -d "'" | cut -d' ' -f3)
 PACKAGE := $(shell grep -m 1 name pyproject.toml | tr -s ' ' | tr -d '"' | tr -d "'" | cut -d' ' -f3)
@@ -58,13 +58,19 @@ test: install-dev
 	@. ${VENV_BIN_ACTIVATE}; \
 	python -m pytest -v tests/
 
-build: wheel
+build: sdist wheel
 
 wheel: dist/${PACKAGE}-${VERSION}-${ABI}-${ABI}-${PLATFORM}.whl
+
+sdist: dist/${PACKAGE}-${VERSION}.tar.gz
 
 dist/${PACKAGE}-${VERSION}-${ABI}-${ABI}-${PLATFORM}.whl:
 	@. ${VENV_BIN_ACTIVATE}; \
 	python -m build --wheel
+
+dist/${PACKAGE}-${VERSION}.tar.gz: dist $(OBJ)
+	@. ${VENV_BIN_ACTIVATE}; \
+	python -m build --sdist
 
 clean:
 	rm -rf build/ dist/ *.egg-info/ .venv/
