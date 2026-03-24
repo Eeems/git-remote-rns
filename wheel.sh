@@ -8,11 +8,14 @@ python_interpreter=cp${python//./}-cp${python//./}
 script=$(
   cat <<EOF
 manylinux-interpreters ensure $python_interpreter;
-export PATH=\$PATH:/opt/python/$python_interpreter/bin;
+python=/opt/python/$python_interpreter/bin/python
 cd /src;
-python -m pip install --upgrade build;
-python -m build --wheel;
-auditwheel repair dist/*.whl;
+if [ -d build ];then
+  make clean
+fi
+\$python -m pip install --upgrade build;
+\$python -m build --wheel;
+auditwheel repair dist/*_$arch.whl;
 EOF
 )
 if [[ "$libc" == "musl" ]]; then
@@ -32,4 +35,4 @@ docker run \
   --rm \
   -v "$(pwd):/src" \
   quay.io/pypa/"$image":latest \
-  /bin/bash -c "$script"
+  /bin/bash -ec "$script"
