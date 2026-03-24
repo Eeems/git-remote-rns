@@ -77,7 +77,7 @@ jobs:
           docker run -v $(pwd):/src \
             quay.io/pypa/manylinux_2_34_x86_64:latest \
             /bin/bash -c "$script"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: pip-wheel-${{ matrix.python }}
           path: wheelhouse/*
@@ -98,7 +98,7 @@ jobs:
         run: pip install build
       - name: Building package
         run: make sdist
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: pip-sdist
           path: dist/*
@@ -157,7 +157,7 @@ jobs:
         uses: actions/checkout@v6
       - name: Download artifact
         id: download
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ${{ matrix.artifact }}
           path: dist
