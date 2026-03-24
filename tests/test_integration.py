@@ -73,6 +73,7 @@ def shared_rnsd(tmp_path_factory: pytest.TempPathFactory):
 
         if time.time() - start >= 10.0:
             rnsd_proc.terminate()
+            _ = rnsd_proc.wait()
             out = rnsd_proc.stdout.read().strip() if rnsd_proc.stdout else ""
             err = rnsd_proc.stderr.read().strip() if rnsd_proc.stderr else ""
             raise Exception(
