@@ -67,12 +67,6 @@ jobs:
     steps:
       - name: Checkout the Git repository
         uses: actions/checkout@v6
-      - name: Setup Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: ${{ matrix.python }}
-          cache: "pip"
-          key: wheel-${{ matrix.python }}-${{ matrix.arch }}-${{ matrix.libc }}-${{ hashFiles('pyproject.toml') }}
       - name: Building package
         run: ./wheel.sh
         env:
