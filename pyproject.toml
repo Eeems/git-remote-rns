@@ -1,12 +1,31 @@
 [project]
 name = "git-remote-rns"
-version = "0.0.1"
+version = "0.0.2"
 description = "Git remote helper for syncing repositories over Reticulum"
-readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 authors = [{name = "Eeems"}]
 dependencies = ["rns>=1.1.4", "lxmf>=0.9.4"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Version Control :: Git",
+]
+dynamic = ["readme"]
+
+[project.urls]
+Homepage = "https://github.com/Eeems/git-remote-rns"
+Repository = "https://github.com/Eeems/git-remote-rns.git"
+Issues = "https://github.com/Eeems/git-remote-rns/issues"
 
 [project.optional-dependencies]
 dev = ["pytest>=7.0", "prospector[with_everything]", 'basedpyright']
@@ -18,6 +37,9 @@ rngit = "rngit.__main__:server"
 [build-system]
 requires = ["setuptools>=70.1", "nuitka>=4.0.6"]
 build-backend = "nuitka.distutils.Build"
+
+[tool.setuptools.dynamic]
+readme = {file= ["README.md"], content-type = "text/markdown"}
 
 [tool.setuptools]
 packages = ["rngit"]
