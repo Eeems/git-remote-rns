@@ -1,4 +1,4 @@
-.PHONY: help install dev test clean review build wheel sdist
+.PHONY: help requirements test clean review build wheel sdist
 
 VERSION := $(shell grep -m 1 version pyproject.toml | tr -s ' ' | tr -d '"' | tr -d "'" | cut -d' ' -f3)
 PACKAGE := $(shell grep -m 1 name pyproject.toml | tr -s ' ' | tr -d '"' | tr -d "'" | cut -d' ' -f3)
@@ -46,21 +46,14 @@ help: ## Show this help
 $(VENV_BIN_ACTIVATE):
 	python -m venv .venv
 	@. ${VENV_BIN_ACTIVATE}; \
-	python -m pip install build
+	python -m pip install --upgrade pip; \
+	python -m pip install --upgrade build wheel
 
-install-deps: $(VENV_BIN_ACTIVATE)
-	@. ${VENV_BIN_ACTIVATE}; \
-	python -m pip install -e . -q
-
-install-dev: $(VENV_BIN_ACTIVATE)
+requirements: $(VENV_BIN_ACTIVATE)
 	@. ${VENV_BIN_ACTIVATE}; \
 	python -m pip install -e ".[dev]" -q
 
-install: install-deps
-
-dev: install-dev
-
-test: install-dev
+test: requirements
 	@. ${VENV_BIN_ACTIVATE}; \
 	python -m pytest -v tests/
 
@@ -73,11 +66,11 @@ wheel: dist/git_remote_rns-${VERSION}-${ABI}-${ABI}-${PLATFORM}.whl
 
 sdist: dist/git_remote_rns-${VERSION}.tar.gz
 
-dist/git_remote_rns-${VERSION}-${ABI}-${ABI}-${PLATFORM}.whl: dist $(OBJ) install-deps
+dist/git_remote_rns-${VERSION}-${ABI}-${ABI}-${PLATFORM}.whl: $(VENV_BIN_ACTIVATE) dist $(OBJ)
 	@. ${VENV_BIN_ACTIVATE}; \
 	python -m build --wheel
 
-dist/git_remote_rns-${VERSION}.tar.gz: dist $(OBJ) install-deps
+dist/git_remote_rns-${VERSION}.tar.gz: $(VENV_BIN_ACTIVATE) dist $(OBJ)
 	@. ${VENV_BIN_ACTIVATE}; \
 	python -m build --sdist
 
@@ -87,7 +80,7 @@ clean:
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 	find . -type f -name "*.pyc" -delete 2>/dev/null || true
 
-lint: install-dev
+lint: requirements
 	@set -e;\
 	. ${VENV_BIN_ACTIVATE}; \
 	python -m basedpyright \
