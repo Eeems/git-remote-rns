@@ -91,7 +91,7 @@ def request_repo_path(data: bytes) -> tuple[str | None, tuple[str, bytes] | None
 
         base_path = os.path.realpath(_repo_path)
         repo_path = os.path.realpath(os.path.join(base_path, path))
-        if not repo_path.startswith(base_path):
+        if os.path.commonpath([base_path, repo_path]) != base_path:
             return "Invalid path", None
 
         if not os.path.exists(repo_path):
