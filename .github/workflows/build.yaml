@@ -90,7 +90,6 @@ jobs:
         with:
           python-version: "3.11"
           cache: "pip"
-          key: sdist-${{ matrix.python }}-${{ hashFiles('pyproject.toml') }}
       - name: Install build tool
         run: pip install build
       - name: Building package
