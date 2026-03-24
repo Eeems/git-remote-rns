@@ -445,6 +445,7 @@ class TestAllowRead:
             stack.cleanup()
 
     def test_wrong_identity_denied(self, tmp_path: Path) -> None:
+        # TODO dtermine why this test is slow
         if not _rnsd_config_dir:
             raise Exception("RNS not available")
 
