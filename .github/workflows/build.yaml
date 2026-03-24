@@ -107,50 +107,6 @@ jobs:
       - build-sdist
       - build-wheel
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        artifact:
-          - "pip-sdist"
-          - "pip-wheel-3.11-x86_64-glibc"
-          - "pip-wheel-3.12-x86_64-glibc"
-          - "pip-wheel-3.13-x86_64-glibc"
-          - "pip-wheel-3.14-x86_64-glibc"
-          - "pip-wheel-3.11-i686-glibc"
-          - "pip-wheel-3.12-i686-glibc"
-          - "pip-wheel-3.13-i686-glibc"
-          - "pip-wheel-3.14-i686-glibc"
-          - "pip-wheel-3.11-ppc64le-glibc"
-          - "pip-wheel-3.12-ppc64le-glibc"
-          - "pip-wheel-3.13-ppc64le-glibc"
-          - "pip-wheel-3.14-ppc64le-glibc"
-          - "pip-wheel-3.11-aarch64-glibc"
-          - "pip-wheel-3.12-aarch64-glibc"
-          - "pip-wheel-3.13-aarch64-glibc"
-          - "pip-wheel-3.14-aarch64-glibc"
-          - "pip-wheel-3.11-armv7l-glibc"
-          - "pip-wheel-3.12-armv7l-glibc"
-          - "pip-wheel-3.13-armv7l-glibc"
-          - "pip-wheel-3.14-armv7l-glibc"
-          - "pip-wheel-3.11-x86_64-musl"
-          - "pip-wheel-3.12-x86_64-musl"
-          - "pip-wheel-3.13-x86_64-musl"
-          - "pip-wheel-3.14-x86_64-musl"
-          - "pip-wheel-3.11-i686-musl"
-          - "pip-wheel-3.12-i686-musl"
-          - "pip-wheel-3.13-i686-musl"
-          - "pip-wheel-3.14-i686-musl"
-          - "pip-wheel-3.11-ppc64le-musl"
-          - "pip-wheel-3.12-ppc64le-musl"
-          - "pip-wheel-3.13-ppc64le-musl"
-          - "pip-wheel-3.14-ppc64le-musl"
-          - "pip-wheel-3.11-aarch64-musl"
-          - "pip-wheel-3.12-aarch64-musl"
-          - "pip-wheel-3.13-aarch64-musl"
-          - "pip-wheel-3.14-aarch64-musl"
-          - "pip-wheel-3.11-armv7l-musl"
-          - "pip-wheel-3.12-armv7l-musl"
-          - "pip-wheel-3.13-armv7l-musl"
-          - "pip-wheel-3.14-armv7l-musl"
     permissions:
       id-token: write
       contents: write
@@ -162,7 +118,8 @@ jobs:
         id: download
         uses: actions/download-artifact@v8
         with:
-          name: ${{ matrix.artifact }}
+          pattern: pip-*
+          merge-multiple: true
       - name: Publish package distributions to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
@@ -175,50 +132,6 @@ jobs:
       - build-wheel
       - build-sdist
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        artifact:
-          - "pip-sdist"
-          - "pip-wheel-3.11-x86_64-glibc"
-          - "pip-wheel-3.12-x86_64-glibc"
-          - "pip-wheel-3.13-x86_64-glibc"
-          - "pip-wheel-3.14-x86_64-glibc"
-          - "pip-wheel-3.11-i686-glibc"
-          - "pip-wheel-3.12-i686-glibc"
-          - "pip-wheel-3.13-i686-glibc"
-          - "pip-wheel-3.14-i686-glibc"
-          - "pip-wheel-3.11-ppc64le-glibc"
-          - "pip-wheel-3.12-ppc64le-glibc"
-          - "pip-wheel-3.13-ppc64le-glibc"
-          - "pip-wheel-3.14-ppc64le-glibc"
-          - "pip-wheel-3.11-aarch64-glibc"
-          - "pip-wheel-3.12-aarch64-glibc"
-          - "pip-wheel-3.13-aarch64-glibc"
-          - "pip-wheel-3.14-aarch64-glibc"
-          - "pip-wheel-3.11-armv7l-glibc"
-          - "pip-wheel-3.12-armv7l-glibc"
-          - "pip-wheel-3.13-armv7l-glibc"
-          - "pip-wheel-3.14-armv7l-glibc"
-          - "pip-wheel-3.11-x86_64-musl"
-          - "pip-wheel-3.12-x86_64-musl"
-          - "pip-wheel-3.13-x86_64-musl"
-          - "pip-wheel-3.14-x86_64-musl"
-          - "pip-wheel-3.11-i686-musl"
-          - "pip-wheel-3.12-i686-musl"
-          - "pip-wheel-3.13-i686-musl"
-          - "pip-wheel-3.14-i686-musl"
-          - "pip-wheel-3.11-ppc64le-musl"
-          - "pip-wheel-3.12-ppc64le-musl"
-          - "pip-wheel-3.13-ppc64le-musl"
-          - "pip-wheel-3.14-ppc64le-musl"
-          - "pip-wheel-3.11-aarch64-musl"
-          - "pip-wheel-3.12-aarch64-musl"
-          - "pip-wheel-3.13-aarch64-musl"
-          - "pip-wheel-3.14-aarch64-musl"
-          - "pip-wheel-3.11-armv7l-musl"
-          - "pip-wheel-3.12-armv7l-musl"
-          - "pip-wheel-3.13-armv7l-musl"
-          - "pip-wheel-3.14-armv7l-musl"
     permissions:
       contents: write
     steps:
@@ -228,7 +141,8 @@ jobs:
         id: download
         uses: actions/download-artifact@v8
         with:
-          name: ${{ matrix.artifact }}
+          pattern: pip-*
+          merge-multiple: true
           path: dist
       - name: Upload to release
         run: find . -type f | xargs -rI {} gh release upload "$TAG" {} --clobber
