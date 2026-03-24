@@ -45,6 +45,8 @@ help: ## Show this help
 
 $(VENV_BIN_ACTIVATE):
 	python -m venv .venv
+	@. ${VENV_BIN_ACTIVATE}; \
+	python -m pip install build
 
 install-deps: $(VENV_BIN_ACTIVATE)
 	@. ${VENV_BIN_ACTIVATE}; \
@@ -71,11 +73,11 @@ wheel: dist/git_remote_rns-${VERSION}-${ABI}-${ABI}-${PLATFORM}.whl
 
 sdist: dist/git_remote_rns-${VERSION}.tar.gz
 
-dist/git_remote_rns-${VERSION}-${ABI}-${ABI}-${PLATFORM}.whl: dist $(OBJ)
+dist/git_remote_rns-${VERSION}-${ABI}-${ABI}-${PLATFORM}.whl: dist $(OBJ) install-deps
 	@. ${VENV_BIN_ACTIVATE}; \
 	python -m build --wheel
 
-dist/git_remote_rns-${VERSION}.tar.gz: dist $(OBJ)
+dist/git_remote_rns-${VERSION}.tar.gz: dist $(OBJ) install-deps
 	@. ${VENV_BIN_ACTIVATE}; \
 	python -m build --sdist
 
