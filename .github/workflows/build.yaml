@@ -48,6 +48,7 @@ jobs:
     needs: [lint, test]
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         python:
           - "3.11"
