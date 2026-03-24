@@ -3,6 +3,10 @@
 VERSION := $(shell grep -m 1 version pyproject.toml | tr -s ' ' | tr -d '"' | tr -d "'" | cut -d' ' -f3)
 PACKAGE := $(shell grep -m 1 name pyproject.toml | tr -s ' ' | tr -d '"' | tr -d "'" | cut -d' ' -f3)
 
+OBJ := $(shell find rngit -type f)
+OBJ += pyproject.toml
+OBJ += README.md
+
 ifeq ($(VENV_BIN_ACTIVATE),)
 VENV_BIN_ACTIVATE := .venv/bin/activate
 endif
@@ -60,15 +64,18 @@ test: install-dev
 
 build: sdist wheel
 
-wheel: dist/${PACKAGE}-${VERSION}-${ABI}-${ABI}-${PLATFORM}.whl
+dist:
+	mkdir -p dist
 
-sdist: dist/${PACKAGE}-${VERSION}.tar.gz
+wheel: dist/git_remote_rns-${VERSION}-${ABI}-${ABI}-${PLATFORM}.whl
 
-dist/${PACKAGE}-${VERSION}-${ABI}-${ABI}-${PLATFORM}.whl:
+sdist: dist/git_remote_rns-${VERSION}.tar.gz
+
+dist/git_remote_rns-${VERSION}-${ABI}-${ABI}-${PLATFORM}.whl: dist $(OBJ)
 	@. ${VENV_BIN_ACTIVATE}; \
 	python -m build --wheel
 
-dist/${PACKAGE}-${VERSION}.tar.gz: dist $(OBJ)
+dist/git_remote_rns-${VERSION}.tar.gz: dist $(OBJ)
 	@. ${VENV_BIN_ACTIVATE}; \
 	python -m build --sdist
 
