@@ -47,4 +47,4 @@ The `/path/to/repo` directory can point to a parent directory with child directo
 git clone rns::<hexhash>/my_repo
 ```
 
-The repositories can be bare repositories, or a worktree with the `.git` folder inside it.
+The repositories can be bare repositories, or a worktree with the `.git` folder inside it. I don't recommend hosting the worktree versions though, as you wont be able to push updates to the checked out branch.

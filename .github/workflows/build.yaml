@@ -44,7 +44,7 @@ jobs:
           git config --global user.name "Github Runner"
           make test
   build-wheel:
-    name: Build wheel with python ${{ matrix.python }}
+    name: Build wheel
     needs: [lint, test]
     runs-on: ubuntu-latest
     strategy:
@@ -55,31 +55,27 @@ jobs:
           - "3.12"
           - "3.13"
           - "3.14"
+        arch:
+          - x86_64
+          - i686
+          - ppc64le
+          - aarch64
+          - armv7l
+        libc:
+          - glibc
+          - musl
     steps:
       - name: Checkout the Git repository
         uses: actions/checkout@v6
-      - name: Setup Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: ${{ matrix.python }}
-          cache: "pip"
       - name: Building package
-        run: |
-          python_version=${{ matrix.python }}
-          python_version=cp${python_version//.}
-          script=$(cat <<EOF
-          cd /src;
-          export PATH=\$PATH:/opt/python/$python_version-$python_version/bin;
-          make ${{ env.FLAGS }} wheel;
-          auditwheel repair dist/*.whl;
-          EOF
-          )
-          docker run -v $(pwd):/src \
-            quay.io/pypa/manylinux_2_34_x86_64:latest \
-            /bin/bash -c "$script"
+        run: ./wheel.sh
+        env:
+          python: ${{ matrix.python }}
+          arch: ${{ matrix.arch }}
+          libc: ${{ matrix.libc }}
       - uses: actions/upload-artifact@v6
         with:
-          name: pip-wheel-${{ matrix.python }}
+          name: pip-wheel-${{ matrix.python }}-${{ matrix.arch }}-${{ matrix.libc }}
           path: wheelhouse/*
           if-no-files-found: error
   build-sdist:
@@ -110,14 +106,6 @@ jobs:
       - build-sdist
       - build-wheel
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        artifact:
-          - "pip-sdist"
-          - "pip-wheel-3.11"
-          - "pip-wheel-3.12"
-          - "pip-wheel-3.13"
-          - "pip-wheel-3.14"
     permissions:
       id-token: write
       contents: write
@@ -129,7 +117,8 @@ jobs:
         id: download
         uses: actions/download-artifact@v8
         with:
-          name: ${{ matrix.artifact }}
+          pattern: pip-*
+          merge-multiple: true
       - name: Publish package distributions to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
@@ -142,14 +131,6 @@ jobs:
       - build-wheel
       - build-sdist
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        artifact:
-          - "pip-sdist"
-          - "pip-wheel-3.11"
-          - "pip-wheel-3.12"
-          - "pip-wheel-3.13"
-          - "pip-wheel-3.14"
     permissions:
       contents: write
     steps:
@@ -159,7 +140,8 @@ jobs:
         id: download
         uses: actions/download-artifact@v8
         with:
-          name: ${{ matrix.artifact }}
+          pattern: pip-*
+          merge-multiple: true
           path: dist
       - name: Upload to release
         run: find . -type f | xargs -rI {} gh release upload "$TAG" {} --clobber
