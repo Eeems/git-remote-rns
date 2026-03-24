@@ -13,3 +13,15 @@ def server():
 
 
 __all__ = ["client", "server"]
+
+if __name__ == "__main__":
+    executable = sys.argv.pop(1)
+    match executable:
+        case "rngit":
+            server()
+
+        case "git-remote-rns":
+            client()
+
+        case _:
+            raise NotImplementedError(executable)

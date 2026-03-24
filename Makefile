@@ -55,7 +55,9 @@ requirements: $(VENV_BIN_ACTIVATE) ## Install development requirements
 
 test: requirements ## Run tests
 	@. ${VENV_BIN_ACTIVATE}; \
-	python -m pytest -v tests/
+	python -m pytest \
+	  --verbose \
+	  tests/
 
 build: sdist wheel ## Build wheel and sdist
 

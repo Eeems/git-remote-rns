@@ -2,7 +2,7 @@ import os
 import pathlib
 import random
 import re
-import shutil
+import select
 import string
 import subprocess
 import sys
@@ -40,54 +40,52 @@ _rnsd_config_dir: Path | None = None
 
 @pytest.fixture(scope="session", autouse=True)
 def shared_rnsd(tmp_path_factory: pytest.TempPathFactory):
-    global _rnsd_process, _rnsd_config_dir
-
-    rnsd_bin = shutil.which("rnsd")
-    if rnsd_bin is None:
-        pytest.skip("rnsd binary not found in PATH")
+    global _rnsd_process
+    global _rnsd_config_dir
 
     config_dir = tmp_path_factory.mktemp("rns")
-
     rns_config = config_dir / "config"
     _ = rns_config.write_text(RETICULUM_CONFIG)
 
-    assert rnsd_bin is not None
-
     rnsd_proc = subprocess.Popen(
-        [rnsd_bin, "--config", str(config_dir), "-v"],
+        [
+            sys.executable,
+            "-m",
+            "RNS.Utilities.rnsd",
+            "--config",
+            str(config_dir),
+            "--verbose",
+        ],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
         bufsize=1,
     )
 
-    time.sleep(1)
-    if rnsd_proc.poll() is not None:
-        out = rnsd_proc.stdout.read().strip() if rnsd_proc.stdout else ""
-        err = rnsd_proc.stderr.read().strip() if rnsd_proc.stderr else ""
-        pytest.skip(f"rnsd failed to start. stdout: {out!r}, stderr: {err!r}")
-
-    def wait_for_rns_ready(timeout: float = 15) -> bool:
-        import subprocess as subp
-
-        time.sleep(2)
-        start = time.time()
-        while time.time() - start < timeout:
-            result = subp.run(
-                ["rnstatus", "--config", str(config_dir), "-a"],
-                capture_output=True,
-                text=True,
+    start = time.time()
+    while True:
+        if rnsd_proc.poll() is not None:
+            out = rnsd_proc.stdout.read().strip() if rnsd_proc.stdout else ""
+            err = rnsd_proc.stderr.read().strip() if rnsd_proc.stderr else ""
+            raise Exception(
+                f"rnsd exited early: {rnsd_proc.returncode} stdout: {out!r}, stderr: {err!r}"
             )
-            if "Shared Instance" in result.stdout and "Up" in result.stdout:
-                return True
-            time.sleep(0.5)
 
-        return False
+        if time.time() - start >= 10.0:
+            rnsd_proc.terminate()
+            out = rnsd_proc.stdout.read().strip() if rnsd_proc.stdout else ""
+            err = rnsd_proc.stderr.read().strip() if rnsd_proc.stderr else ""
+            raise Exception(
+                f"RNS shared instance failed to start in time. stdout: {out!r}, stderr: {err!r}"
+            )
 
-    rns_ready = wait_for_rns_ready()
-    if not rns_ready:
-        rnsd_proc.terminate()
-        pytest.skip("RNS shared instance failed to start")
+        result = subprocess.run(
+            ["rnstatus", "--config", str(config_dir), "-a"],
+            capture_output=True,
+            text=True,
+        )
+        if "Shared Instance" in result.stdout and "Up" in result.stdout:
+            break
 
     _rnsd_process = rnsd_proc
     _rnsd_config_dir = config_dir
@@ -119,17 +117,12 @@ class IntegrationStack:
         allow_all_read: bool = False,
         allow_read: list[str] | None = None,
         allow_write: list[str] | None = None,
-    ) -> "IntegrationStack":
-        venv_bin = pathlib.Path(sys.executable).parent
-        rngit_bin = str(venv_bin / "rngit")
-
-        if not pathlib.Path(rngit_bin).exists():
-            pytest.skip("rngit not installed")
-
-        assert rngit_bin is not None
-
+    ):
         args = [
-            rngit_bin,
+            sys.executable,
+            "-m",
+            "rngit",
+            "rngit",
             str(self.server_repo),
             "--verbose",
             "--config",
@@ -188,20 +181,9 @@ class IntegrationStack:
 
         self.server_hash = dest_hash
 
-        time.sleep(2)
-
-        return self
-
     def run_client(
         self, stdin: str, identity_path: Path | None = None
     ) -> subprocess.CompletedProcess[str]:
-        venv_bin = pathlib.Path(sys.executable).parent
-        git_remote_rns_bin = str(venv_bin / "git-remote-rns")
-
-        if not pathlib.Path(git_remote_rns_bin).exists():
-            pytest.skip("git-remote-rns not installed")
-
-        assert git_remote_rns_bin is not None
         assert self.server_hash is not None
 
         env = {**os.environ, "RNS_CONFIG_PATH": str(self.rns_config)}
@@ -209,7 +191,14 @@ class IntegrationStack:
             env["RNS_IDENTITY_PATH"] = str(identity_path)
 
         result = subprocess.run(
-            [git_remote_rns_bin, "origin", self.server_hash],
+            [
+                sys.executable,
+                "-m",
+                "rngit",
+                "git-remote-rns",
+                "origin",
+                self.server_hash,
+            ],
             env=env,
             input=stdin,
             capture_output=True,
@@ -313,20 +302,17 @@ def _init_git_repo(repo: Path) -> None:
     )
 
 
-import select
-
-
 class TestPublicAccess:
     def test_capabilities(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
-            pytest.skip("RNS not available")
+            raise Exception("RNS not available")
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
         _init_git_repo(repo_dir)
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
-        _ = stack.start_server(allow_all_read=True)
+        stack.start_server(allow_all_read=True)
         try:
             result = stack.run_client("capabilities\n\n")
             output = result.stdout + result.stderr
@@ -338,14 +324,14 @@ class TestPublicAccess:
 
     def test_list(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
-            pytest.skip("RNS not available")
+            raise Exception("RNS not available")
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
         _init_git_repo(repo_dir)
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
-        _ = stack.start_server(allow_all_read=True)
+        stack.start_server(allow_all_read=True)
         try:
             result = stack.run_client("list\n\n")
             output = result.stdout + result.stderr
@@ -358,14 +344,14 @@ class TestPublicAccess:
 
     def test_fetch_single_branch(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
-            pytest.skip("RNS not available")
+            raise Exception("RNS not available")
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
         _init_git_repo(repo_dir)
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
-        _ = stack.start_server(allow_all_read=True)
+        stack.start_server(allow_all_read=True)
         try:
             result = stack.run_client("fetch HEAD refs/heads/main\n\n")
             output = result.stdout + result.stderr
@@ -379,14 +365,14 @@ class TestPublicAccess:
 
     def test_fetch_all_refs(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
-            pytest.skip("RNS not available")
+            raise Exception("RNS not available")
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
         _init_git_repo(repo_dir)
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
-        _ = stack.start_server(allow_all_read=True)
+        stack.start_server(allow_all_read=True)
         try:
             result = stack.run_client("fetch HEAD refs/heads/main\n\n")
             output = result.stdout + result.stderr
@@ -401,7 +387,7 @@ class TestPublicAccess:
 class TestAllowRead:
     def test_list_with_allow_read(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
-            pytest.skip("RNS not available")
+            raise Exception("RNS not available")
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
@@ -409,7 +395,7 @@ class TestAllowRead:
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
         client_hash = stack.get_client_identity()
-        _ = stack.start_server(allow_read=[client_hash])
+        stack.start_server(allow_read=[client_hash])
         try:
             result = stack.run_client("list\n\n")
             output = result.stdout + result.stderr
@@ -421,7 +407,7 @@ class TestAllowRead:
 
     def test_fetch_with_allow_read(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
-            pytest.skip("RNS not available")
+            raise Exception("RNS not available")
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
@@ -429,7 +415,7 @@ class TestAllowRead:
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
         client_hash = stack.get_client_identity()
-        _ = stack.start_server(allow_read=[client_hash])
+        stack.start_server(allow_read=[client_hash])
         try:
             result = stack.run_client("fetch HEAD refs/heads/main\n\n")
             output = result.stdout + result.stderr
@@ -439,7 +425,7 @@ class TestAllowRead:
 
     def test_list_for_push_fails(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
-            pytest.skip("RNS not available")
+            raise Exception("RNS not available")
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
@@ -447,7 +433,7 @@ class TestAllowRead:
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
         client_hash = stack.get_client_identity()
-        _ = stack.start_server(allow_read=[client_hash])
+        stack.start_server(allow_read=[client_hash])
         try:
             result = stack.run_client("list\nfor-push\n\n")
             output = result.stdout + result.stderr
@@ -459,7 +445,7 @@ class TestAllowRead:
 
     def test_wrong_identity_denied(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
-            pytest.skip("RNS not available")
+            raise Exception("RNS not available")
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
@@ -468,20 +454,22 @@ class TestAllowRead:
         alt_rns_config = tmp_path / "rns_alt"
         alt_rns_config.mkdir()
 
-        import RNS
-
         alt_identity = RNS.Identity(True)
         alt_identity_path = alt_rns_config / "identity"
         _ = alt_identity.to_file(str(alt_identity_path))  # pyright: ignore[reportUnknownMemberType]
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
         correct_hash = stack.get_client_identity()
-        _ = stack.start_server(allow_read=[correct_hash])
+        stack.start_server(allow_read=[correct_hash])
         try:
             env = {**os.environ, "RNS_CONFIG_PATH": str(alt_rns_config)}
             venv_bin = pathlib.Path(sys.executable).parent
             assert stack.server_hash is not None
-            cmd: list[str] = [str(venv_bin / "git-remote-rns"), "origin", stack.server_hash]
+            cmd: list[str] = [
+                str(venv_bin / "git-remote-rns"),
+                "origin",
+                stack.server_hash,
+            ]
             result = subprocess.run(
                 cmd,
                 env=env,
@@ -501,7 +489,7 @@ class TestAllowRead:
 class TestAllowWrite:
     def test_list_with_allow_write(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
-            pytest.skip("RNS not available")
+            raise Exception("RNS not available")
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
@@ -509,7 +497,7 @@ class TestAllowWrite:
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
         client_hash = stack.get_client_identity()
-        _ = stack.start_server(allow_write=[client_hash])
+        stack.start_server(allow_write=[client_hash])
         try:
             result = stack.run_client("list\n\n")
             output = result.stdout + result.stderr
@@ -521,7 +509,7 @@ class TestAllowWrite:
 
     def test_fetch_with_allow_write(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
-            pytest.skip("RNS not available")
+            raise Exception("RNS not available")
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
@@ -529,7 +517,7 @@ class TestAllowWrite:
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
         client_hash = stack.get_client_identity()
-        _ = stack.start_server(allow_write=[client_hash])
+        stack.start_server(allow_write=[client_hash])
         try:
             result = stack.run_client("fetch HEAD refs/heads/main\n\n")
             output = result.stdout + result.stderr
@@ -539,7 +527,7 @@ class TestAllowWrite:
 
     def test_list_for_push(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
-            pytest.skip("RNS not available")
+            raise Exception("RNS not available")
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
@@ -547,7 +535,7 @@ class TestAllowWrite:
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
         client_hash = stack.get_client_identity()
-        _ = stack.start_server(allow_write=[client_hash])
+        stack.start_server(allow_write=[client_hash])
         try:
             result = stack.run_client("list\nfor-push\n\n")
             output = result.stdout + result.stderr
@@ -559,7 +547,7 @@ class TestAllowWrite:
 
     def test_push_new_branch(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
-            pytest.skip("RNS not available")
+            raise Exception("RNS not available")
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
@@ -567,7 +555,7 @@ class TestAllowWrite:
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
         client_hash = stack.get_client_identity()
-        _ = stack.start_server(allow_write=[client_hash])
+        stack.start_server(allow_write=[client_hash])
         try:
             result = stack.run_client("push HEAD:refs/heads/new-branch\n\n")
             output = result.stdout + result.stderr
@@ -581,7 +569,7 @@ class TestAllowWrite:
 
     def test_push_update_branch(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
-            pytest.skip("RNS not available")
+            raise Exception("RNS not available")
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
@@ -589,7 +577,7 @@ class TestAllowWrite:
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
         client_hash = stack.get_client_identity()
-        _ = stack.start_server(allow_write=[client_hash])
+        stack.start_server(allow_write=[client_hash])
         try:
             result = stack.run_client("push HEAD:refs/heads/feature\n\n")
             output = result.stdout + result.stderr
@@ -599,7 +587,7 @@ class TestAllowWrite:
 
     def test_push_force(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
-            pytest.skip("RNS not available")
+            raise Exception("RNS not available")
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
@@ -607,7 +595,7 @@ class TestAllowWrite:
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
         client_hash = stack.get_client_identity()
-        _ = stack.start_server(allow_write=[client_hash])
+        stack.start_server(allow_write=[client_hash])
         try:
             result = stack.run_client("push HEAD:refs/heads/feature\n\n")
             output = result.stdout + result.stderr
@@ -633,7 +621,7 @@ class TestAllowWrite:
 
     def test_delete_branch(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
-            pytest.skip("RNS not available")
+            raise Exception("RNS not available")
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
@@ -642,16 +630,17 @@ class TestAllowWrite:
         _ = subprocess.run(
             ["git", "checkout", "-b", "feature"], cwd=repo_dir, capture_output=True
         )
-        _ = subprocess.run(["git", "checkout", "main"], cwd=repo_dir, capture_output=True)
+        _ = subprocess.run(
+            ["git", "checkout", "main"], cwd=repo_dir, capture_output=True
+        )
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
         client_hash = stack.get_client_identity()
-        _ = stack.start_server(allow_write=[client_hash])
+        stack.start_server(allow_write=[client_hash])
         try:
             result = stack.run_client("push :refs/heads/feature\n\n")
             output = result.stdout + result.stderr
             if result.returncode != 0:
-                time.sleep(1)
                 result = stack.run_client("push :refs/heads/feature\n\n")
                 output = result.stdout + result.stderr
             assert result.returncode == 0, f"Delete failed: {output}"
@@ -663,7 +652,7 @@ class TestAllowWrite:
 
     def test_clone_and_push(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
-            pytest.skip("RNS not available")
+            raise Exception("RNS not available")
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
@@ -671,7 +660,7 @@ class TestAllowWrite:
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
         client_hash = stack.get_client_identity()
-        _ = stack.start_server(allow_write=[client_hash])
+        stack.start_server(allow_write=[client_hash])
         try:
             client_repo = stack.create_client_working_dir()
 
@@ -692,7 +681,9 @@ class TestAllowWrite:
                 print(f"Clone stdout: {clone_result.stdout}")
 
             if not (client_repo / ".git").exists():
-                pytest.skip(f"Clone failed - .git not created: {clone_result.stderr}")
+                raise Exception(
+                    f"Clone failed - .git not created: {clone_result.stderr}"
+                )
 
             new_file = client_repo / "new_feature.py"
             _ = new_file.write_text("# new feature")
@@ -709,7 +700,10 @@ class TestAllowWrite:
             print(f"Commit stderr: {commit_result.stderr}")
 
             git_log = subprocess.run(
-                ["git", "log", "--oneline"], cwd=client_repo, capture_output=True, text=True
+                ["git", "log", "--oneline"],
+                cwd=client_repo,
+                capture_output=True,
+                text=True,
             )
             print(f"Client repo log: {git_log.stdout}")
 
@@ -736,13 +730,15 @@ class TestAllowWrite:
             elif push_result.returncode == 0:
                 pass
             else:
-                assert False, f"Neither push succeeded nor changes on server: {push_result.stderr}"
+                assert False, (
+                    f"Neither push succeeded nor changes on server: {push_result.stderr}"
+                )
         finally:
             stack.cleanup()
 
     def test_wrong_identity_denied(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
-            pytest.skip("RNS not available")
+            raise Exception("RNS not available")
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
@@ -751,7 +747,7 @@ class TestAllowWrite:
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
         correct_hash = stack.get_client_identity()
         _ = stack.get_alternate_client_identity()
-        _ = stack.start_server(allow_write=[correct_hash])
+        stack.start_server(allow_write=[correct_hash])
         try:
             result = stack.run_client("push HEAD:refs/heads/main\n\n")
             output = result.stdout + result.stderr
@@ -765,14 +761,14 @@ class TestAllowWrite:
 class TestNoAuth:
     def test_list_no_auth_fails(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
-            pytest.skip("RNS not available")
+            raise Exception("RNS not available")
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
         _init_git_repo(repo_dir)
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
-        _ = stack.start_server()
+        stack.start_server()
         try:
             result = stack.run_client("list\n\n")
             output = result.stdout + result.stderr
@@ -784,14 +780,14 @@ class TestNoAuth:
 
     def test_list_for_push_no_auth_fails(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
-            pytest.skip("RNS not available")
+            raise Exception("RNS not available")
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
         _init_git_repo(repo_dir)
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
-        _ = stack.start_server()
+        stack.start_server()
         try:
             result = stack.run_client("list\nfor-push\n\n")
             output = result.stdout + result.stderr
@@ -803,14 +799,14 @@ class TestNoAuth:
 
     def test_push_no_auth_fails(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
-            pytest.skip("RNS not available")
+            raise Exception("RNS not available")
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
         _init_git_repo(repo_dir)
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
-        _ = stack.start_server()
+        stack.start_server()
         try:
             result = stack.run_client("push HEAD:refs/heads/main\n\n")
             output = result.stdout + result.stderr
@@ -822,14 +818,14 @@ class TestNoAuth:
 
     def test_fetch_no_auth_fails(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
-            pytest.skip("RNS not available")
+            raise Exception("RNS not available")
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
         _init_git_repo(repo_dir)
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
-        _ = stack.start_server()
+        stack.start_server()
         try:
             result = stack.run_client("fetch HEAD refs/heads/main\n\n")
             output = result.stdout + result.stderr
