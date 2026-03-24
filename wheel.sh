@@ -10,6 +10,7 @@ script=$(
 manylinux-interpreters ensure $python_interpreter;
 export PATH=\$PATH:/opt/python/$python_interpreter/bin;
 cd /src;
+python -m pip install --upgrade build;
 python -m build --wheel;
 auditwheel repair dist/*.whl;
 EOF
