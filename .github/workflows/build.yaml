@@ -44,7 +44,7 @@ jobs:
           git config --global user.name "Github Runner"
           make test
   build-wheel:
-    name: Build wheel with python ${{ matrix.python }}
+    name: Build wheel with python ${{ matrix.python }}-${{ matrix.arch}}-${{ matrix.libc }}
     needs: [lint, test]
     runs-on: ubuntu-latest
     strategy:
@@ -55,6 +55,15 @@ jobs:
           - "3.12"
           - "3.13"
           - "3.14"
+        arch:
+          - x86_64
+          - i686
+          - ppc64le
+          - aarch64
+          - armv7l
+        libc:
+          - glibc
+          - musl
     steps:
       - name: Checkout the Git repository
         uses: actions/checkout@v6
@@ -63,20 +72,41 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
           cache: "pip"
+          key: wheel-${{ matrix.python }}-${{ matrix.arch }}-${{ matrix.libc }}-${{ hashFiles('pyproject.toml') }}
       - name: Building package
         run: |
-          python_version=${{ matrix.python }}
           python_version=cp${python_version//.}
+          python_interpreter=$python_version-$python_version;
           script=$(cat <<EOF
+          manylinux-interpreters ensure "$python_interpreter";
+          export PATH=\$PATH:/opt/python/$python_interpreter/bin;
           cd /src;
-          export PATH=\$PATH:/opt/python/$python_version-$python_version/bin;
-          make ${{ env.FLAGS }} wheel;
+          python -m build wheel;
           auditwheel repair dist/*.whl;
           EOF
           )
-          docker run -v $(pwd):/src \
-            quay.io/pypa/manylinux_2_34_x86_64:latest \
+          if [[ "$libc" == "musl" ]];then
+            image="musllinux_1_2_$arch"
+          elif [[ "$arch" == "armv7l" ]]; then
+            image="manylinux_2_35_$arch"
+          else
+            image="manylinux_2_34_$arch"
+          fi
+          if [[ "$arch" != "x86_64" ]];then
+            docker run \
+              --privileged \
+              --rm \
+              tonistiigi/binfmt --install all
+          fi
+          docker run \
+            --rm \
+            -v $(pwd):/src \
+            quay.io/pypa/"$image":latest \
             /bin/bash -c "$script"
+        env:
+          arch: ${{ matrix.arch }}
+          python_version: ${{ matrix.python }}
+          libc: ${{ matrix.libc }}
       - uses: actions/upload-artifact@v6
         with:
           name: pip-wheel-${{ matrix.python }}
@@ -94,6 +124,7 @@ jobs:
         with:
           python-version: "3.11"
           cache: "pip"
+          key: sdist-${{ matrix.python }}-${{ hashFiles('pyproject.toml') }}
       - name: Install build tool
         run: pip install build
       - name: Building package
