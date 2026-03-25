@@ -272,8 +272,8 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
                             _ = f.write(data)
 
                         _ = subprocess.check_call(  # nosec B607 B603
-                            ["git", "bundle", "verify", bundle],
-                            stdout=subprocess.DEVNULL,
+                            ["git", "bundle", "verify", "--quiet", bundle],
+                            stderr=subprocess.DEVNULL,
                         )
                         _ = subprocess.check_call(  # nosec B607 B603
                             ["git", "bundle", "unbundle", "--progress", bundle, ref],

@@ -49,22 +49,22 @@ $(VENV_BIN_ACTIVATE):
 	python -m pip install --upgrade pip; \
 	python -m pip install --upgrade build wheel
 
-requirements: $(VENV_BIN_ACTIVATE)
+requirements: $(VENV_BIN_ACTIVATE) ## Install development requirements
 	@. ${VENV_BIN_ACTIVATE}; \
 	python -m pip install -e ".[dev]" -q
 
-test: requirements
+test: requirements ## Run tests
 	@. ${VENV_BIN_ACTIVATE}; \
 	python -m pytest -v tests/
 
-build: sdist wheel
+build: sdist wheel ## Build wheel and sdist
 
 dist:
 	mkdir -p dist
 
-wheel: dist/git_remote_rns-${VERSION}-${ABI}-${ABI}-${PLATFORM}.whl
+wheel: dist/git_remote_rns-${VERSION}-${ABI}-${ABI}-${PLATFORM}.whl # Build wheel
 
-sdist: dist/git_remote_rns-${VERSION}.tar.gz
+sdist: dist/git_remote_rns-${VERSION}.tar.gz # Build sdist
 
 dist/git_remote_rns-${VERSION}-${ABI}-${ABI}-${PLATFORM}.whl: $(VENV_BIN_ACTIVATE) dist $(OBJ)
 	@. ${VENV_BIN_ACTIVATE}; \
@@ -74,13 +74,13 @@ dist/git_remote_rns-${VERSION}.tar.gz: $(VENV_BIN_ACTIVATE) dist $(OBJ)
 	@. ${VENV_BIN_ACTIVATE}; \
 	python -m build --sdist
 
-clean:
+clean: ## Remove build artifacts
 	rm -rf build/ dist/ *.egg-info/ .venv/
 	rm -rf *.build *.dist
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 	find . -type f -name "*.pyc" -delete 2>/dev/null || true
 
-lint: requirements
+lint: requirements ## Lint the codebase
 	@set -e;\
 	. ${VENV_BIN_ACTIVATE}; \
 	python -m basedpyright \
@@ -106,7 +106,7 @@ lint: requirements
 	  --without-tool pycodestyle \
 	  tests
 
-review:
+review: ## Have coderabbit review the code
 	@if command -v coderabbit >/dev/null 2>&1; then \
 	  output=$$(coderabbit review --prompt-only 2>&1); \
 	  status=$$?; \
