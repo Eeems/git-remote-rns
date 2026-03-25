@@ -521,12 +521,7 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
         while True:
             time.sleep(10)
 
-    last_announce = time.time()
     while True:
-        current = time.time()
-        if last_announce + announce_interval >= current:
-            log.debug("Sending announce")
-            _ = server_destination.announce(name)  # pyright: ignore[reportUnknownMemberType]
-            last_announce = current
-
-        time.sleep(0.1)
+        time.sleep(announce_interval)
+        log.debug("Sending announce")
+        _ = server_destination.announce(name)  # pyright: ignore[reportUnknownMemberType]
