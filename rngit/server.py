@@ -329,7 +329,10 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
     parser = argparse.ArgumentParser(description="RNS Git Server", allow_abbrev=False)
     _ = parser.add_argument("repo", help="Path to git repository to serve")
     _ = parser.add_argument(
-        "-c", "--config", help="Path to Reticulum config directory", dest="config"
+        "-c",
+        "--config",
+        help="Path to Reticulum config directory",
+        dest="config",
     )
     _ = parser.add_argument(
         "-v",
@@ -339,10 +342,22 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
         dest="verbose",
     )
     _ = parser.add_argument(
-        "-i", "--identity", help="Path identity file", dest="identity"
+        "-i",
+        "--identity",
+        help="Path identity file",
+        dest="identity",
     )
     _ = parser.add_argument(
-        "--version", action="version", version=f"rngit {__version__}"
+        "-n",
+        "--name",
+        help="Name to annouce",
+        dest="name",
+        default=f"rngit {__version__}",
+    )
+    _ = parser.add_argument(
+        "--version",
+        action="version",
+        version=f"rngit {__version__}",
     )
     _ = parser.add_argument(
         "-a",
@@ -401,6 +416,9 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
 
     assert isinstance(args.announce_interval, int | None)  # pyright: ignore[reportAny] # nosec B101
     announce_interval = args.announce_interval
+
+    assert isinstance(args.name, str)  # pyright: ignore[reportAny] # nosec B101
+    name = args.name.encode()
 
     assert isinstance(args.allow_all_read, bool)  # pyright: ignore[reportAny] # nosec B101
     allow_all_read = args.allow_all_read
@@ -498,7 +516,7 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
     )
     server_destination.set_link_established_callback(on_link_established)  # pyright: ignore[reportUnknownMemberType]
 
-    _ = server_destination.announce()  # pyright: ignore[reportUnknownMemberType]
+    _ = server_destination.announce(name)  # pyright: ignore[reportUnknownMemberType]
     if announce_interval is None:
         while True:
             time.sleep(10)
@@ -508,7 +526,7 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
         current = time.time()
         if last_announce + announce_interval >= current:
             log.debug("Sending announce")
-            _ = server_destination.announce()  # pyright: ignore[reportUnknownMemberType]
+            _ = server_destination.announce(name)  # pyright: ignore[reportUnknownMemberType]
             last_announce = current
 
         time.sleep(0.1)
