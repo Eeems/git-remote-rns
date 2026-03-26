@@ -230,7 +230,7 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
                                 _ = sys.stdout.flush()
                                 return 1
 
-                            assert not data
+                            assert not data  # nosec B101
                             _ = sys.stdout.write(f"ok {remote_ref}\n")
                             _ = sys.stdout.flush()
 
