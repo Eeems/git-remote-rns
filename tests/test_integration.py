@@ -322,13 +322,18 @@ class IntegrationStack:
         return self.client_working_dir
 
     def cleanup(self) -> None:
-        if self.server_proc:
-            self.server_proc.terminate()
-            try:
-                _ = self.server_proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                self.server_proc.kill()
-                _ = self.server_proc.wait()
+        if not self.server_proc:
+            return
+
+        self.server_proc.terminate()
+        try:
+            _ = self.server_proc.wait(timeout=5)
+
+        except subprocess.TimeoutExpired:
+            self.server_proc.kill()
+            _ = self.server_proc.wait()
+
+        print(self.server_proc.stdout)
 
 
 def _init_git_repo(repo: Path) -> None:

@@ -489,36 +489,30 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
     log.info("Destination: %s", RNS.prettyhexrep(server_destination.hash))  # pyright: ignore[reportUnknownMemberType]
     log.info("Read list: %s", "(any)" if allow_all_read else read_list)
     log.info("Write list: %s", write_list)
-    allow_list = set(bytes.fromhex(x) for x in read_list)
     server_destination.register_request_handler(  # pyright: ignore[reportUnknownMemberType]
         "list",
         on_list_request,
         RNS.Destination.ALLOW_ALL,
-        allow_list,
     )
     server_destination.register_request_handler(  # pyright: ignore[reportUnknownMemberType]
         "list-for-push",
         on_list_request,
         RNS.Destination.ALLOW_ALL,
-        allow_list,
     )
     server_destination.register_request_handler(  # pyright: ignore[reportUnknownMemberType]
         "fetch",
         on_fetch_request,
         RNS.Destination.ALLOW_ALL,
-        allow_list,
     )
     server_destination.register_request_handler(  # pyright: ignore[reportUnknownMemberType]
         "push",
         on_push_request,
         RNS.Destination.ALLOW_ALL,
-        allow_list,
     )
     server_destination.register_request_handler(  # pyright: ignore[reportUnknownMemberType]
         "delete",
         on_delete_request,
         RNS.Destination.ALLOW_ALL,
-        allow_list,
     )
     server_destination.set_link_established_callback(on_link_established)  # pyright: ignore[reportUnknownMemberType]
 
