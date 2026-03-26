@@ -244,8 +244,9 @@ class IntegrationStack:
             "RNS_CONFIG_PATH": str(config_path or self.rns_config),
             "VERBOSE": "1",
         }
+        flags: list[str] = ["--verbose"]
         if identity_path:
-            env["RNS_IDENTITY_PATH"] = str(identity_path)
+            flags.append(f"--identity={identity_path}")
 
         result = subprocess.run(
             [
@@ -253,7 +254,7 @@ class IntegrationStack:
                 "-m",
                 "rngit",
                 "git-remote-rns",
-                "--verbose",
+                *flags,
                 "origin",
                 self.server_hash,
             ],
