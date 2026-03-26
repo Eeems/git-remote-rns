@@ -59,13 +59,22 @@ def shared_rnsd():
             "-vvv",
         ],
         stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
     )
 
     # Wait for rnsd to be up
     timeout = 10
     start = time.time()
     while True:
+        if rnsd_proc.returncode is not None:
+            stdout = (
+                rnsd_proc.stdout.read().decode() if rnsd_proc.stdout is not None else ""
+            )
+            raise Exception(
+                f"RNS shared instance exited early: {rnsd_proc.returncode}"
+                + f"\n  stdout: {stdout}"
+            )
+
         # Output error message, but maybe not if it somehow works now.
         proc = subprocess.run(
             [
@@ -97,13 +106,9 @@ def shared_rnsd():
         stdout = (
             rnsd_proc.stdout.read().decode() if rnsd_proc.stdout is not None else ""
         )
-        stderr = (
-            rnsd_proc.stderr.read().decode() if rnsd_proc.stderr is not None else ""
-        )
         raise Exception(
             f"RNS shared instance failed to start in {timeout} seconds..."
             + f"\n  stdout: {stdout}"
-            + f"\n  stderr: {stderr}"
             + f"\n  rnstatus: {proc.stdout or ''}"
         )
 
@@ -202,11 +207,19 @@ class IntegrationStack:
         self.server_hash = dest_hash
 
     def run_client(
-        self, stdin: str, identity_path: Path | None = None, timeout: int = 30
+        self,
+        stdin: str,
+        identity_path: Path | None = None,
+        config_path: Path | None = None,
+        timeout: int = 30,
     ) -> subprocess.CompletedProcess[str]:
         assert self.server_hash is not None
 
-        env = {**os.environ, "RNS_CONFIG_PATH": str(self.rns_config), "VERBOSE": "1"}
+        env = {
+            **os.environ,
+            "RNS_CONFIG_PATH": str(config_path or self.rns_config),
+            "VERBOSE": "1",
+        }
         if identity_path:
             env["RNS_IDENTITY_PATH"] = str(identity_path)
 
@@ -492,22 +505,7 @@ class TestAllowRead:
         stack.start_server(allow_read=[correct_hash])
         time.sleep(0.1)  # Wait for server to be ready
         try:
-            env = {**os.environ, "RNS_CONFIG_PATH": str(alt_rns_config)}
-            venv_bin = pathlib.Path(sys.executable).parent
-            assert stack.server_hash is not None
-            cmd: list[str] = [
-                str(venv_bin / "git-remote-rns"),
-                "origin",
-                stack.server_hash,
-            ]
-            result = subprocess.run(
-                cmd,
-                env=env,
-                input="list\n\n",
-                capture_output=True,
-                text=True,
-                timeout=60,
-            )
+            result = stack.run_client("list\n\n", alt_identity_path, alt_rns_config)
             output = result.stdout + result.stderr
             assert "Not allowed" in output or result.returncode != 0, (
                 f"Expected wrong identity to be denied, got: {output}"
@@ -782,13 +780,22 @@ class TestAllowWrite:
         repo_dir.mkdir()
         _init_git_repo(repo_dir)
 
+        alt_rns_config = tmp_path / "rns_alt"
+        alt_rns_config.mkdir()
+
+        alt_identity = RNS.Identity(True)
+        alt_identity_path = alt_rns_config / "identity"
+        _ = alt_identity.to_file(str(alt_identity_path))  # pyright: ignore[reportUnknownMemberType]
+
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
         correct_hash = stack.get_client_identity()
         _ = stack.get_alternate_client_identity()
         stack.start_server(allow_write=[correct_hash])
         time.sleep(0.1)  # Wait for server to be ready
         try:
-            result = stack.run_client("push HEAD:refs/heads/main\n\n")
+            result = stack.run_client(
+                "push HEAD:refs/heads/main\n\n", alt_identity_path, alt_rns_config
+            )
             output = result.stdout + result.stderr
             assert "Not allowed" in output or result.returncode != 0, (
                 f"Expected wrong identity to be denied, got: {output}"
