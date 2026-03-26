@@ -42,6 +42,7 @@ jobs:
       - name: Run tests
         run: |
           set -e
+          pip install wheel
           git config --global user.name "Github Runner"
           make test
   build-wheel:

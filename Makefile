@@ -15,13 +15,13 @@ endif
 ifeq ($(VENV_BIN_ACTIVATE),)
 VENV_BIN_ACTIVATE := .venv/bin/activate
 endif
+
 define PLATFORM_SCRIPT
 from sysconfig import get_platform
 print(get_platform().replace('-', '_'), end="")
 endef
 export PLATFORM_SCRIPT
 PLATFORM := $(shell python -c "$$PLATFORM_SCRIPT")
-
 define ABI_SCRIPT
 def main():
     try:
