@@ -1,8 +1,10 @@
+import atexit
 import os
 import pathlib
 import random
 import re
 import select
+import shutil
 import string
 import subprocess
 import sys
@@ -34,16 +36,16 @@ RETICULUM_CONFIG = f"""
     listen_on = 127.0.0.2
 """
 
-_rnsd_process: subprocess.Popen[str] | None = None
+_rnsd_process: subprocess.Popen[bytes] | None = None
 _rnsd_config_dir: Path | None = None
 
 
 @pytest.fixture(scope="session", autouse=True)
-def shared_rnsd(tmp_path_factory: pytest.TempPathFactory):
+def shared_rnsd():
     global _rnsd_process
     global _rnsd_config_dir
-
-    config_dir = tmp_path_factory.mktemp("rns")
+    config_dir = Path(tempfile.mkdtemp())
+    _ = atexit.register(lambda: shutil.rmtree(config_dir))
     rns_config = config_dir / "config"
     _ = rns_config.write_text(RETICULUM_CONFIG)
 
@@ -54,39 +56,39 @@ def shared_rnsd(tmp_path_factory: pytest.TempPathFactory):
             "RNS.Utilities.rnsd",
             "--config",
             str(config_dir),
-            "--verbose",
+            "-vvv",
         ],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        text=True,
-        bufsize=1,
     )
 
+    # Wait for rnsd to be up
     start = time.time()
-    while True:
-        if rnsd_proc.poll() is not None:
-            out = rnsd_proc.stdout.read().strip() if rnsd_proc.stdout else ""
-            err = rnsd_proc.stderr.read().strip() if rnsd_proc.stderr else ""
-            raise Exception(
-                f"rnsd exited early: {rnsd_proc.returncode} stdout: {out!r}, stderr: {err!r}"
-            )
+    while subprocess.run(
+        ["rnstatus", "--config", str(config_dir), "-a"],
+        stdin=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    ).returncode:
+        if time.time() - start < 20.0:
+            continue
 
-        if time.time() - start >= 10.0:
-            rnsd_proc.terminate()
+        rnsd_proc.terminate()
+        try:
+            _ = rnsd_proc.wait(timeout=5)
+
+        except subprocess.TimeoutExpired:
+            rnsd_proc.kill()
             _ = rnsd_proc.wait()
-            out = rnsd_proc.stdout.read().strip() if rnsd_proc.stdout else ""
-            err = rnsd_proc.stderr.read().strip() if rnsd_proc.stderr else ""
-            raise Exception(
-                f"RNS shared instance failed to start in time. stdout: {out!r}, stderr: {err!r}"
-            )
 
-        result = subprocess.run(
-            ["rnstatus", "--config", str(config_dir), "-a"],
-            capture_output=True,
-            text=True,
+        stdout = (
+            rnsd_proc.stdout.read().decode() if rnsd_proc.stdout is not None else ""
         )
-        if "Shared Instance" in result.stdout and "Up" in result.stdout:
-            break
+        stderr = (
+            rnsd_proc.stderr.read().decode() if rnsd_proc.stderr is not None else ""
+        )
+        raise Exception(
+            f"RNS shared instance failed to start in 20 seconds...\n  stdout: {stdout}\n  stderr:{stderr}"
+        )
 
     _rnsd_process = rnsd_proc
     _rnsd_config_dir = config_dir
@@ -96,6 +98,7 @@ def shared_rnsd(tmp_path_factory: pytest.TempPathFactory):
     rnsd_proc.terminate()
     try:
         _ = rnsd_proc.wait(timeout=5)
+
     except subprocess.TimeoutExpired:
         rnsd_proc.kill()
         _ = rnsd_proc.wait()
@@ -179,15 +182,14 @@ class IntegrationStack:
 
         assert dest_hash is not None, "Could not get destination hash from server"
         assert len(dest_hash) == 32, f"Invalid destination hash length: {dest_hash}"
-
         self.server_hash = dest_hash
 
     def run_client(
-        self, stdin: str, identity_path: Path | None = None
+        self, stdin: str, identity_path: Path | None = None, timeout: int = 30
     ) -> subprocess.CompletedProcess[str]:
         assert self.server_hash is not None
 
-        env = {**os.environ, "RNS_CONFIG_PATH": str(self.rns_config)}
+        env = {**os.environ, "RNS_CONFIG_PATH": str(self.rns_config), "VERBOSE": "1"}
         if identity_path:
             env["RNS_IDENTITY_PATH"] = str(identity_path)
 
@@ -197,6 +199,7 @@ class IntegrationStack:
                 "-m",
                 "rngit",
                 "git-remote-rns",
+                "--verbose",
                 "origin",
                 self.server_hash,
             ],
@@ -204,7 +207,7 @@ class IntegrationStack:
             input=stdin,
             capture_output=True,
             text=True,
-            timeout=30,
+            timeout=timeout,
         )
         print(f"CLIENT STDOUT: {result.stdout}")
         print(f"CLIENT STDERR: {result.stderr}")
