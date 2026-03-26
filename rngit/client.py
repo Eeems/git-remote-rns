@@ -89,6 +89,50 @@ def request(
             return f"Invalid status: {receipt.get_status()}", None
 
 
+def c_style_quote(value: bytes | str) -> str:
+    if isinstance(value, bytes):
+        value = value.decode()
+
+    escaped = '"'
+    for char in value:
+        match char:
+            case "\\":
+                escaped += "\\\\"
+
+            case '"':
+                escaped += '\\"'
+
+            case "\n":
+                escaped += "\\n"
+
+            case "\t":
+                escaped += "\\t"
+
+            case "\r":
+                escaped += "\\r"
+
+            case "\b":
+                escaped += "\\b"
+
+            case "\f":
+                escaped += "\\f"
+
+            case "\a":
+                escaped += "\\a"
+
+            case "\v":
+                escaped += "\\v"
+
+            case _:
+                if ord(char) < 32 or ord(char) > 126:  # non-printable
+                    escaped += f"\\x{ord(char):02x}"
+
+                else:
+                    escaped += char
+
+    return escaped + '"'
+
+
 def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
     parser = argparse.ArgumentParser(prog="git-remote-rns")
     _ = parser.add_argument("remote", help="Remote name (ignored)")
@@ -224,7 +268,7 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
                                 f"{local_ref}:{remote_ref}\n".encode() + data,
                             )
                             if err is not None:
-                                msg = f'error {remote_ref} "{err}"\n'
+                                msg = f"error {remote_ref} {c_style_quote(err)}\n"
                                 log.debug(msg)
                                 _ = sys.stdout.write(msg)
                                 return 1
