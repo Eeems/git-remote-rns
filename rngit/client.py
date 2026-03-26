@@ -226,15 +226,13 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
                                 f"{local_ref}:{remote_ref}\n".encode() + data,
                             )
                             if err is not None:
-                                _ = sys.stderr.write(err)
-                                _ = sys.stderr.write("\n")
-                                _ = sys.stderr.flush()
+                                _ = sys.stdout.write(f'error {remote_ref} "{err}"\n')
+                                _ = sys.stdout.flush()
                                 return 1
 
-                            if data:
-                                _ = sys.stderr.buffer.write(data)
-                                _ = sys.stderr.buffer.write(b"\n")
-                                _ = sys.stderr.flush()
+                            assert not data
+                            _ = sys.stdout.write(f"ok {remote_ref}\n")
+                            _ = sys.stdout.flush()
 
                 _ = sys.stdout.write("\n")
                 try:

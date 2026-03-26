@@ -72,6 +72,14 @@ def shared_rnsd():
         if time.time() - start < 20.0:
             continue
 
+        # Output error message, but maybe not if it somehow works now.
+        if not subprocess.run(
+            ["rnstatus", "--config", str(config_dir), "-a"],
+            stdin=subprocess.STDOUT,
+            stderr=subprocess.STDOUT,
+        ).returncode:
+            break
+
         rnsd_proc.terminate()
         try:
             _ = rnsd_proc.wait(timeout=5)

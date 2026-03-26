@@ -281,7 +281,10 @@ def on_push_request(
             )
             log.debug("git bundle unbundle return code: %d", proc.returncode)
 
-        return proc.returncode.to_bytes(1, "big") + proc.stderr
+        if proc.returncode:
+            return proc.returncode.to_bytes(1, "big") + proc.stderr
+
+        return b"\0"
 
     except Exception as e:
         traceback.print_exc()
@@ -318,7 +321,10 @@ def on_delete_request(
             check=False,
         )
         log.debug("git update-ref return code: %d", proc.returncode)
-        return b"\0" + proc.stderr
+        if proc.returncode:
+            return proc.returncode.to_bytes(1, "big") + proc.stderr
+
+        return b"\0"
 
     except Exception as e:
         traceback.print_exc()
