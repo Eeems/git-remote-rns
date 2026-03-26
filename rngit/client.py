@@ -196,13 +196,11 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
                         if err is not None:
                             _ = sys.stderr.write(err)
                             _ = sys.stderr.write("\n")
-                            _ = sys.stderr.flush()
                             return 1
 
                         if data:
                             _ = sys.stderr.buffer.write(data)
                             _ = sys.stderr.buffer.write(b"\n")
-                            _ = sys.stderr.flush()
 
                     else:
                         with TemporaryDirectory() as tmpdir:
@@ -227,12 +225,10 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
                             )
                             if err is not None:
                                 _ = sys.stdout.write(f'error {remote_ref} "{err}"\n')
-                                _ = sys.stdout.flush()
                                 return 1
 
                             assert not data  # nosec B101
                             _ = sys.stdout.write(f"ok {remote_ref}\n")
-                            _ = sys.stdout.flush()
 
                 while fetch_queue:
                     sha, ref = fetch_queue.pop(0)
@@ -240,7 +236,6 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
                     if err is not None:
                         _ = sys.stderr.write(err)
                         _ = sys.stderr.write("\n")
-                        _ = sys.stderr.flush()
                         return 1
 
                     assert data is not None  # nosec B101
@@ -258,8 +253,14 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
                             stdout=subprocess.DEVNULL,
                         )
 
+                _ = sys.stderr.flush()
                 _ = sys.stdout.write("\n")
-                _ = sys.stdout.flush()
+                try:
+                    _ = sys.stdout.flush()
+
+                except BrokenPipeError:
+                    break
+
                 continue
 
             match parts[0]:
@@ -293,7 +294,6 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
                     if err is not None:
                         _ = sys.stderr.write(err)
                         _ = sys.stderr.write("\n")
-                        _ = sys.stderr.flush()
                         return 1
 
                     assert data is not None  # nosec B101
@@ -302,8 +302,7 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
                     _ = sys.stdout.flush()
 
                 case _:
-                    _ = sys.stderr.write(f"Unknown command: {parts[1]}\n")
-                    _ = sys.stderr.flush()
+                    _ = sys.stderr.write(f"Unknown command: {parts[0]}\n")
                     return 1
 
         log.debug("End of stdin")

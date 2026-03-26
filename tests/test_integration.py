@@ -109,6 +109,7 @@ def shared_rnsd():
         if tries:
             rnsd_proc = None
             tries -= 1
+            start = time.time()
             continue
 
         stdout = (
@@ -233,6 +234,7 @@ class IntegrationStack:
     def run_client(
         self,
         stdin: str,
+        cwd: Path | str | None = None,
         identity_path: Path | None = None,
         config_path: Path | None = None,
         timeout: int = 30,
@@ -258,6 +260,7 @@ class IntegrationStack:
                 "origin",
                 self.server_hash,
             ],
+            cwd=cwd,
             env=env,
             input=stdin,
             capture_output=True,
@@ -298,14 +301,26 @@ class IntegrationStack:
         return self._alternate_hexhash
 
     def git(
-        self, *args: str, cwd: Path | None = None
+        self,
+        *args: str,
+        cwd: Path | None = None,
+        check: bool = False,
+        timeout: int = 60,
+        capture_output: bool = False,
     ) -> subprocess.CompletedProcess[bytes]:
         if cwd is None:
             cwd = self.server_repo
+
+        env = {**os.environ, "RNS_CONFIG_PATH": str(_rnsd_config_dir)}
+        venv_bin = pathlib.Path(sys.executable).parent
+        env["PATH"] = str(venv_bin) + ":" + env.get("PATH", "")
         return subprocess.run(
             ["git", *args],
             cwd=cwd,
-            capture_output=True,
+            capture_output=capture_output,
+            check=check,
+            env=env,
+            timeout=timeout,
         )
 
     def _create_test_commit(
@@ -315,12 +330,41 @@ class IntegrationStack:
             cwd = self.server_repo
         path = cwd / filename
         _ = path.write_text(content)
-        _ = self.git("add", ".", cwd=cwd)
-        _ = self.git("commit", "-m", f"Add {filename}", cwd=cwd)
+        _ = self.git("add", ".", cwd=cwd, check=True)
+        _ = self.git("commit", "-m", f"Add {filename}", cwd=cwd, check=True)
 
     def create_client_working_dir(self) -> Path:
         self.client_working_dir = Path(tempfile.mkdtemp())
         return self.client_working_dir
+
+    def init_client_repo(self, empty: bool = True, copy: bool = False) -> Path:
+        repodir = self.create_client_working_dir() / "repo"
+        if copy:
+            _ = shutil.copytree(self.server_repo, repodir)
+
+        else:
+            repodir.mkdir()
+            self.init_git_repo(repodir, populate=False)
+
+        _ = self.git(
+            "remote",
+            "add",
+            "origin",
+            f"rns::{self.server_hash}",
+            cwd=repodir,
+            check=True,
+        )
+        if not empty:
+            _ = self.git(
+                "commit",
+                "--allow-empty",
+                "-m",
+                "init",
+                cwd=repodir,
+                check=True,
+            )
+
+        return repodir
 
     def cleanup(self) -> None:
         if not self.server_proc:
@@ -337,35 +381,17 @@ class IntegrationStack:
         if self.server_proc.stdout is not None:
             print(self.server_proc.stdout.read())
 
-    def init_git_repo(self, repo: Path) -> None:
-        _ = subprocess.run(["git", "init"], cwd=repo, capture_output=True, check=True)
-        _ = subprocess.run(
-            ["git", "config", "user.email", "test@test.com"],
-            cwd=repo,
-            capture_output=True,
-            check=True,
-        )
-        _ = subprocess.run(
-            ["git", "config", "user.name", "Test User"],
-            cwd=repo,
-            capture_output=True,
-        )
+    def init_git_repo(self, repo: Path, populate: bool = True) -> None:
+        _ = self.git("init", cwd=repo, check=True)
+        if not populate:
+            return
+
+        _ = self.git("config", "user.email", "test@test.com", cwd=repo, check=True)
+        _ = self.git("config", "user.name", "Test User", cwd=repo, check=True)
         _ = (repo / "test.txt").write_text("hello")
-        _ = subprocess.run(
-            ["git", "add", "."], cwd=repo, capture_output=True, check=True
-        )
-        _ = subprocess.run(
-            ["git", "commit", "-m", "init"],
-            cwd=repo,
-            capture_output=True,
-            check=True,
-        )
-        _ = subprocess.run(
-            ["git", "branch", "-m", "main"],
-            cwd=repo,
-            capture_output=True,
-            check=True,
-        )
+        _ = self.git("add", ".", cwd=repo, check=True)
+        _ = self.git("commit", "-m", "init", cwd=repo, check=True)
+        _ = self.git("branch", "-m", "main", cwd=repo, check=True)
 
 
 class TestPublicAccess:
@@ -385,6 +411,7 @@ class TestPublicAccess:
             assert "list" in output, f"'list' missing from capabilities: {output}"
             assert "fetch" in output, f"'fetch' missing from capabilities: {output}"
             assert "push" in output, f"'push' missing from capabilities: {output}"
+
         finally:
             stack.cleanup()
 
@@ -405,6 +432,7 @@ class TestPublicAccess:
                 f"Expected refs/heads in output, got: {output}"
             )
             assert "HEAD" in output, f"Expected HEAD in output, got: {output}"
+
         finally:
             stack.cleanup()
 
@@ -418,14 +446,18 @@ class TestPublicAccess:
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
         stack.init_git_repo(repo_dir)
         stack.start_server(allow_all_read=True)
+
+        client_repo = stack.init_client_repo()
         try:
-            result = stack.run_client("fetch HEAD refs/heads/main\n\n")
+            result = stack.run_client("fetch HEAD refs/heads/main\n\n", cwd=client_repo)
             output = result.stdout + result.stderr
             if result.returncode != 0:
                 print(f"Fetch failed with code {result.returncode}")
                 print(f"Output: {output}")
+
             assert result.returncode == 0, f"Fetch failed: {output}"
             assert "error" not in output.lower(), f"Error in output: {output}"
+
         finally:
             stack.cleanup()
 
@@ -439,13 +471,15 @@ class TestPublicAccess:
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
         stack.init_git_repo(repo_dir)
         stack.start_server(allow_all_read=True)
+        client_repo = stack.init_client_repo()
         try:
-            result = stack.run_client("fetch HEAD refs/heads/main\n\n")
+            result = stack.run_client("fetch HEAD refs/heads/main\n\n", cwd=client_repo)
             output = result.stdout + result.stderr
             if result.returncode != 0:
                 print(f"Fetch failed with code {result.returncode}")
                 print(f"Output: {output}")
             assert result.returncode == 0, f"Fetch failed: {output}"
+
         finally:
             stack.cleanup()
 
@@ -462,12 +496,14 @@ class TestAllowRead:
         stack.init_git_repo(repo_dir)
         client_hash = stack.get_client_identity()
         stack.start_server(allow_read=[client_hash])
+        client_repo = stack.init_client_repo()
         try:
-            result = stack.run_client("list\n\n")
+            result = stack.run_client("list\n\n", cwd=client_repo)
             output = result.stdout + result.stderr
             assert "refs/heads" in output, (
                 f"Expected refs/heads in output, got: {output}"
             )
+
         finally:
             stack.cleanup()
 
@@ -482,10 +518,12 @@ class TestAllowRead:
         stack.init_git_repo(repo_dir)
         client_hash = stack.get_client_identity()
         stack.start_server(allow_read=[client_hash])
+        client_repo = stack.init_client_repo()
         try:
-            result = stack.run_client("fetch HEAD refs/heads/main\n\n")
+            result = stack.run_client("fetch HEAD refs/heads/main\n\n", cwd=client_repo)
             output = result.stdout + result.stderr
             assert result.returncode == 0, f"Fetch failed: {output}"
+
         finally:
             stack.cleanup()
 
@@ -506,6 +544,7 @@ class TestAllowRead:
             assert "Not allowed" in output or result.returncode != 0, (
                 f"Expected list-for-push to fail without write access, got: {output}"
             )
+
         finally:
             stack.cleanup()
 
@@ -529,11 +568,15 @@ class TestAllowRead:
         assert correct_hash != alt_identity.hexhash, "Failed to generate a new identity"
         stack.start_server(allow_read=[correct_hash])
         try:
-            result = stack.run_client("list\n\n", alt_identity_path)
+            result = stack.run_client(
+                "list\n\n",
+                identity_path=alt_identity_path,
+            )
             output = result.stdout + result.stderr
             assert "Not allowed" in output or result.returncode != 0, (
                 f"Expected wrong identity to be denied, got: {output}"
             )
+
         finally:
             stack.cleanup()
 
@@ -556,6 +599,7 @@ class TestAllowWrite:
             assert "refs/heads" in output, (
                 f"Expected refs/heads in output, got: {output}"
             )
+
         finally:
             stack.cleanup()
 
@@ -570,10 +614,12 @@ class TestAllowWrite:
         stack.init_git_repo(repo_dir)
         client_hash = stack.get_client_identity()
         stack.start_server(allow_write=[client_hash])
+        client_repo = stack.init_client_repo()
         try:
-            result = stack.run_client("fetch HEAD refs/heads/main\n\n")
+            result = stack.run_client("fetch HEAD refs/heads/main\n\n", cwd=client_repo)
             output = result.stdout + result.stderr
             assert result.returncode == 0, f"Fetch failed: {output}"
+
         finally:
             stack.cleanup()
 
@@ -594,6 +640,7 @@ class TestAllowWrite:
             assert "Not allowed" not in output, (
                 f"Expected list-for-push to work with write access, got: {output}"
             )
+
         finally:
             stack.cleanup()
 
@@ -608,14 +655,24 @@ class TestAllowWrite:
         stack.init_git_repo(repo_dir)
         client_hash = stack.get_client_identity()
         stack.start_server(allow_write=[client_hash])
+        client_repo = stack.init_client_repo(copy=True)
         try:
-            result = stack.run_client("push HEAD:refs/heads/new-branch\n\n")
+            result = stack.run_client(
+                "push HEAD:refs/heads/new-branch\n\n",
+                cwd=client_repo,
+            )
             output = result.stdout + result.stderr
-            assert result.returncode == 0, f"Push failed: {output}"
-            assert "error" not in output.lower(), f"Error in output: {output}"
+            assert result.returncode == 0, "Push failed"
+            assert "error" not in output.lower(), "Error in output"
 
-            verify_result = stack.git("log", "new-branch", cwd=repo_dir)
+            verify_result = stack.git(
+                "log",
+                "new-branch",
+                cwd=repo_dir,
+                capture_output=True,
+            )
             assert verify_result.returncode == 0, "Branch not created on server"
+
         finally:
             stack.cleanup()
 
@@ -630,10 +687,14 @@ class TestAllowWrite:
         stack.init_git_repo(repo_dir)
         client_hash = stack.get_client_identity()
         stack.start_server(allow_write=[client_hash])
+        client_repo = stack.init_client_repo(copy=True)
         try:
-            result = stack.run_client("push HEAD:refs/heads/feature\n\n")
-            output = result.stdout + result.stderr
-            assert result.returncode == 0, f"Push failed: {output}"
+            result = stack.run_client(
+                "push HEAD:refs/heads/feature\n\n",
+                cwd=client_repo,
+            )
+            assert result.returncode == 0, "Push failed"
+
         finally:
             stack.cleanup()
 
@@ -648,26 +709,25 @@ class TestAllowWrite:
         stack.init_git_repo(repo_dir)
         client_hash = stack.get_client_identity()
         stack.start_server(allow_write=[client_hash])
+        client_repo = stack.init_client_repo(empty=False)
         try:
-            result = stack.run_client("push HEAD:refs/heads/feature\n\n")
-            output = result.stdout + result.stderr
-            assert result.returncode == 0, f"Push failed: {output}"
+            result = stack.run_client(
+                "push HEAD:refs/heads/feature\n\n",
+                cwd=client_repo,
+            )
+            assert result.returncode == 0, "Push failed"
 
-            new_commit = repo_dir / "test2.txt"
+            new_commit = client_repo / "test2.txt"
             _ = new_commit.write_text("world")
-            _ = subprocess.run(
-                ["git", "add", "."], cwd=repo_dir, capture_output=True, check=True
-            )
-            _ = subprocess.run(
-                ["git", "commit", "-m", "add more"],
-                cwd=repo_dir,
-                capture_output=True,
-                check=True,
-            )
+            _ = stack.git("add", ".", cwd=client_repo, check=True)
+            _ = stack.git("commit", "-m", "add more", cwd=client_repo, check=True)
 
-            result = stack.run_client("push +HEAD:refs/heads/feature\n\n")
-            output = result.stdout + result.stderr
-            assert result.returncode == 0, f"Force push failed: {output}"
+            result = stack.run_client(
+                "push +HEAD:refs/heads/feature\n\n",
+                cwd=client_repo,
+            )
+            assert result.returncode == 0, "Force push failed"
+
         finally:
             stack.cleanup()
 
@@ -680,24 +740,28 @@ class TestAllowWrite:
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
         stack.init_git_repo(repo_dir)
-        _ = subprocess.run(
-            ["git", "checkout", "-b", "feature"], cwd=repo_dir, capture_output=True
-        )
-        _ = subprocess.run(
-            ["git", "checkout", "main"], cwd=repo_dir, capture_output=True
-        )
+        _ = stack.git("checkout", "-b", "feature", cwd=repo_dir, check=True)
+        _ = stack.git("checkout", "main", cwd=repo_dir, check=True)
         client_hash = stack.get_client_identity()
         stack.start_server(allow_write=[client_hash])
+        client_repo = stack.init_client_repo()
         try:
-            result = stack.run_client("push :refs/heads/feature\n\n")
-            output = result.stdout + result.stderr
+            result = stack.run_client("push :refs/heads/feature\n\n", cwd=client_repo)
             if result.returncode != 0:
-                result = stack.run_client("push :refs/heads/feature\n\n")
-                output = result.stdout + result.stderr
-            assert result.returncode == 0, f"Delete failed: {output}"
+                result = stack.run_client(
+                    "push :refs/heads/feature\n\n", cwd=client_repo
+                )
 
-            verify_result = stack.git("log", "feature", cwd=repo_dir)
+            assert result.returncode == 0, "Delete failed"
+
+            verify_result = stack.git(
+                "log",
+                "feature",
+                cwd=client_repo,
+                capture_output=True,
+            )
             assert verify_result.returncode != 0, "Branch should have been deleted"
+
         finally:
             stack.cleanup()
 
@@ -715,21 +779,17 @@ class TestAllowWrite:
         try:
             client_repo = stack.create_client_working_dir()
 
-            env = {**os.environ, "RNS_CONFIG_PATH": str(_rnsd_config_dir)}
-            venv_bin = pathlib.Path(sys.executable).parent
-            env["PATH"] = str(venv_bin) + ":" + env.get("PATH", "")
-
-            clone_result = subprocess.run(
-                ["git", "clone", f"rns::{stack.server_hash}", str(client_repo)],
-                env=env,
+            clone_result = stack.git(
+                "clone",
+                f"rns::{stack.server_hash}",
+                str(client_repo),
                 capture_output=True,
-                text=True,
-                timeout=60,
+                check=True,
             )
 
             if clone_result.returncode != 0:
-                print(f"Clone stderr: {clone_result.stderr}")
-                print(f"Clone stdout: {clone_result.stdout}")
+                print(f"Clone stderr: {clone_result.stderr.decode()}")
+                print(f"Clone stdout: {clone_result.stdout.decode()}")
 
             if not (client_repo / ".git").exists():
                 raise Exception(
@@ -738,52 +798,61 @@ class TestAllowWrite:
 
             new_file = client_repo / "new_feature.py"
             _ = new_file.write_text("# new feature")
-            _ = subprocess.run(
-                ["git", "add", "."], cwd=client_repo, capture_output=True, check=True
-            )
-            commit_result = subprocess.run(
-                ["git", "commit", "-m", "Add new feature"],
+            _ = stack.git("add", ".", cwd=client_repo, check=True)
+            commit_result = stack.git(
+                "commit",
+                "-m",
+                "Add new feature",
                 cwd=client_repo,
+                check=True,
                 capture_output=True,
-                text=True,
             )
-            print(f"Commit result: {commit_result.stdout}")
-            print(f"Commit stderr: {commit_result.stderr}")
+            print(f"Commit result: {commit_result.stdout.decode()}")
+            print(f"Commit stderr: {commit_result.stderr.decode()}")
 
-            git_log = subprocess.run(
-                ["git", "log", "--oneline"],
+            git_log = stack.git(
+                "log",
+                "--oneline",
                 cwd=client_repo,
+                check=True,
                 capture_output=True,
-                text=True,
             )
             print(f"Client repo log: {git_log.stdout}")
 
-            push_result = subprocess.run(
-                ["git", "push", "origin", "HEAD:refs/heads/new-feature", "-f"],
+            push_result = stack.git(
+                "push",
+                "origin",
+                "HEAD:refs/heads/new-feature",
                 cwd=client_repo,
-                env=env,
                 capture_output=True,
-                text=True,
-                timeout=60,
             )
 
-            print(f"Push stderr: {push_result.stderr}")
-            print(f"Push stdout: {push_result.stdout}")
+            print(f"Push stderr: {push_result.stderr.decode()}")
+            print(f"Push stdout: {push_result.stdout.decode()}")
+            assert push_result.returncode == 0, "Push failed"
 
-            verify_result = stack.git("log", "--oneline", cwd=repo_dir)
+            verify_result = stack.git(
+                "log",
+                "--oneline",
+                cwd=repo_dir,
+                capture_output=True,
+            )
             print(f"Server log: {verify_result.stdout.decode()}")
 
-            refs_result = stack.git("show-ref", cwd=repo_dir)
+            refs_result = stack.git(
+                "show-ref",
+                cwd=repo_dir,
+                capture_output=True,
+            )
             print(f"Server refs: {refs_result.stdout.decode()}")
 
-            if "new-feature" in refs_result.stdout.decode():
-                pass
-            elif push_result.returncode == 0:
-                pass
-            else:
-                assert False, (
-                    f"Neither push succeeded nor changes on server: {push_result.stderr}"
-                )
+            assert "new-feature" in refs_result.stdout.decode(), (
+                f"Neither push succeeded nor changes on server: {push_result.stderr}"
+            )
+            assert push_result.returncode == 0, (
+                f"Neither push succeeded nor changes on server: {push_result.stderr}"
+            )
+
         finally:
             stack.cleanup()
 
@@ -810,12 +879,13 @@ class TestAllowWrite:
         try:
             result = stack.run_client(
                 "push HEAD:refs/heads/main\n\n",
-                alt_identity_path,
+                identity_path=alt_identity_path,
             )
             output = result.stdout + result.stderr
             assert "Not allowed" in output or result.returncode != 0, (
                 f"Expected wrong identity to be denied, got: {output}"
             )
+
         finally:
             stack.cleanup()
 

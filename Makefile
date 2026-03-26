@@ -1,4 +1,4 @@
-.PHONY: help requirements test clean review build wheel sdist
+.PHONY: help requirements test clean review build wheel sdist list-tests
 
 VERSION := $(shell grep -m 1 version pyproject.toml | tr -s ' ' | tr -d '"' | tr -d "'" | cut -d' ' -f3)
 PACKAGE := $(shell grep -m 1 name pyproject.toml | tr -s ' ' | tr -d '"' | tr -d "'" | cut -d' ' -f3)
@@ -6,6 +6,11 @@ PACKAGE := $(shell grep -m 1 name pyproject.toml | tr -s ' ' | tr -d '"' | tr -d
 OBJ := $(shell find rngit -type f)
 OBJ += pyproject.toml
 OBJ += README.md
+
+ifndef SKIP_TESTS
+TESTS := $(shell find tests -type f -name '*.py')
+INDIVIDUAL_TESTS := $(shell SKIP_TESTS=1 MAKEFLAGS= make --no-print-directory list-tests)
+endif
 
 ifeq ($(VENV_BIN_ACTIVATE),)
 VENV_BIN_ACTIVATE := .venv/bin/activate
@@ -57,7 +62,51 @@ test: requirements ## Run tests
 	@. ${VENV_BIN_ACTIVATE}; \
 	python -m pytest \
 	  --verbose \
+	  -n $$(nproc) \
 	  tests/
+
+list-tests: ## List all available tests
+	@if [ ! -f ${VENV_BIN_ACTIVATE} ];then \
+	  $(MAKE) requirements >/dev/null; \
+	fi
+	@. ${VENV_BIN_ACTIVATE}; \
+	if ! python -m pytest --version >/dev/null;then \
+	  $(MAKE) requirements >/dev/null; \
+	fi
+	@. ${VENV_BIN_ACTIVATE}; \
+	python -m pytest \
+	  --collect-only \
+	  --quiet \
+	  tests/ \
+	| grep -v ' tests collected in ' \
+	| xargs -n1
+
+ifndef SKIP_TESTS
+define test-target
+$2: requirements
+	@. ${VENV_BIN_ACTIVATE}; \
+	python -m pytest \
+	  --verbose \
+	  $1
+endef
+
+$(foreach T,\
+	$(TESTS),\
+	$(eval $(call test-target,\
+		$(T),\
+		$(shell echo $(T) | sed 's|:|\\:|g'),\,\
+	))\
+)
+
+$(foreach T,\
+	$(INDIVIDUAL_TESTS),\
+	$(eval $(call \
+		test-target,\
+		$(T),\
+		$(shell echo $(T) | sed 's|:|\\:|g'),\
+	))\
+)
+endif
 
 build: sdist wheel ## Build wheel and sdist
 
