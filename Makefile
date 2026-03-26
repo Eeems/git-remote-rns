@@ -62,7 +62,6 @@ test: requirements ## Run tests
 	@. ${VENV_BIN_ACTIVATE}; \
 	python -m pytest \
 	  --verbose \
-	  -n $$(nproc) \
 	  tests/
 
 list-tests: ## List all available tests
