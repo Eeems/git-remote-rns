@@ -1,7 +1,6 @@
 import argparse
 import logging
 import os
-import signal
 import subprocess  # noqa: B404
 import sys
 import threading
@@ -235,13 +234,7 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
                             _ = sys.stdout.flush()
 
                 _ = sys.stdout.write("\n")
-                try:
-                    _ = sys.stdout.flush()
-
-                except BrokenPipeError:
-                    # Ignoring as git likes to close stdout early
-                    pass
-
+                _ = sys.stdout.flush()
                 continue
 
             match parts[0]:
@@ -307,7 +300,6 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
                     return 1
 
         log.debug("End of stdin")
-        _ = signal.signal(signal.SIGPIPE, signal.SIG_DFL)
 
     except Exception:
         log.error(traceback.format_exc())
