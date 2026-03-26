@@ -113,7 +113,7 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
 
     assert isinstance(args.verbose, bool)  # pyright: ignore[reportAny] # nosec B101
     verbose = args.verbose or bool(os.environ.get("VERBOSE", 0))
-    configure_logging(logging.DEBUG if verbose else logging.WARNING)
+    configure_logging("git-remote-rns", logging.DEBUG if verbose else logging.WARNING)
 
     assert isinstance(args.url, str)  # pyright: ignore[reportAny] # nosec B101
     url = args.url
@@ -176,7 +176,7 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
             if not line:
                 continue
 
-            log.debug("STDIN '%s'", line.rstrip())
+            log.debug("STDIN '%s'", line.encode())
 
             parts = cast(list[str], line.split(maxsplit=1))
             assert isinstance(parts, list)  # nosec B101
@@ -224,11 +224,15 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
                                 f"{local_ref}:{remote_ref}\n".encode() + data,
                             )
                             if err is not None:
-                                _ = sys.stdout.write(f'error {remote_ref} "{err}"\n')
+                                msg = f'error {remote_ref} "{err}"\n'
+                                log.debug(msg)
+                                _ = sys.stdout.write(msg)
                                 return 1
 
                             assert not data  # nosec B101
-                            _ = sys.stdout.write(f"ok {remote_ref}\n")
+                            msg = f"ok {remote_ref}\n"
+                            log.debug(msg)
+                            _ = sys.stdout.write(msg)
 
                 while fetch_queue:
                     sha, ref = fetch_queue.pop(0)
@@ -254,8 +258,8 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
                         )
 
                 _ = sys.stderr.flush()
-                _ = sys.stdout.write("\n")
                 try:
+                    _ = sys.stdout.write("\n")
                     _ = sys.stdout.flush()
 
                 except BrokenPipeError:

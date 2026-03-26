@@ -262,7 +262,7 @@ def on_push_request(
                 stderr=subprocess.PIPE,
                 check=False,
             )
-            log.debug("git bundle verifyreturn code: %d", proc.returncode)
+            log.debug("git bundle verify return code: %d", proc.returncode)
             if proc.returncode:
                 return proc.returncode.to_bytes(1, "big") + proc.stderr
 
@@ -280,9 +280,8 @@ def on_push_request(
                 check=False,
             )
             log.debug("git bundle unbundle return code: %d", proc.returncode)
-
-        if proc.returncode:
-            return proc.returncode.to_bytes(1, "big") + proc.stderr
+            if proc.returncode:
+                return proc.returncode.to_bytes(1, "big") + proc.stderr
 
         return b"\0"
 
@@ -458,7 +457,7 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
     global _read_list
     _read_list = None if allow_all_read else read_list
 
-    configure_logging(logging.DEBUG if verbose else logging.WARNING)
+    configure_logging("rngit", logging.DEBUG if verbose else logging.WARNING)
 
     _ = RNS.Reticulum(config_path, RNS.LOG_VERBOSE if verbose else RNS.LOG_WARNING)
 

@@ -13,13 +13,13 @@ class packets(Enum):
     PACKET_IDENTIFIED = 0x01.to_bytes(1, "big")
 
 
-def configure_logging(level: int = logging.WARNING):
+def configure_logging(name: str, level: int = logging.WARNING):
     while logging.root.handlers:
         logging.root.removeHandler(logging.root.handlers[0])
 
     logging.basicConfig(
         level=level,
-        format="%(asctime)s [%(levelname)s] %(message)s",
+        format=f"%(asctime)s {name} [%(levelname)s] %(message)s",
         stream=sys.stderr,
     )
 

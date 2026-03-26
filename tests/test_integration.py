@@ -9,6 +9,7 @@ import string
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from pathlib import Path
 
@@ -54,6 +55,7 @@ def shared_rnsd():
     timeout = 5
     start = time.time()
     rnsd_proc = None
+    remaining = tries
     while True:
         if rnsd_proc is None:
             rnsd_proc = subprocess.Popen(
@@ -106,9 +108,9 @@ def shared_rnsd():
             rnsd_proc.kill()
             _ = rnsd_proc.wait()
 
-        if tries:
+        if remaining:
             rnsd_proc = None
-            tries -= 1
+            remaining -= 1
             start = time.time()
             continue
 
@@ -116,7 +118,7 @@ def shared_rnsd():
             rnsd_proc.stdout.read().decode() if rnsd_proc.stdout is not None else ""
         )
         raise Exception(
-            f"RNS shared instance failed to start in {timeout} seconds..."
+            f"RNS shared instance failed to start in {tries} tries..."
             + f"\n  stdout: {stdout}"
             + f"\n  rnstatus: {proc.returncode} {proc.stdout or ''}"
         )
@@ -231,6 +233,18 @@ class IntegrationStack:
                     + f"{self.server_proc.stdout}"
                 )
 
+        def fn(proc: subprocess.Popen[str]):
+            while proc.returncode is None:
+                for f in (proc.stdout, proc.stderr):
+                    if f is None:
+                        continue
+
+                    line = f.readline()
+                    if line:
+                        print(line, file=sys.stderr, end="")
+
+        threading.Thread(target=fn, args=(self.server_proc,)).start()
+
     def run_client(
         self,
         stdin: str,
@@ -240,12 +254,6 @@ class IntegrationStack:
         timeout: int = 30,
     ) -> subprocess.CompletedProcess[str]:
         assert self.server_hash is not None
-
-        env = {
-            **os.environ,
-            "RNS_CONFIG_PATH": str(config_path or self.rns_config),
-            "VERBOSE": "1",
-        }
         flags: list[str] = ["--verbose"]
         if identity_path:
             flags.append(f"--identity={identity_path}")
@@ -261,7 +269,10 @@ class IntegrationStack:
                 self.server_hash,
             ],
             cwd=cwd,
-            env=env,
+            env={
+                **os.environ,
+                "RNS_CONFIG_PATH": str(config_path or self.rns_config),
+            },
             input=stdin,
             capture_output=True,
             text=True,
@@ -311,15 +322,18 @@ class IntegrationStack:
         if cwd is None:
             cwd = self.server_repo
 
-        env = {**os.environ, "RNS_CONFIG_PATH": str(_rnsd_config_dir)}
         venv_bin = pathlib.Path(sys.executable).parent
-        env["PATH"] = str(venv_bin) + ":" + env.get("PATH", "")
         return subprocess.run(
             ["git", *args],
             cwd=cwd,
             capture_output=capture_output,
             check=check,
-            env=env,
+            env={
+                **os.environ,
+                "PATH": str(venv_bin) + ":" + os.environ.get("PATH", ""),
+                "RNS_CONFIG_PATH": str(_rnsd_config_dir),
+                "VERBOSE": "0",
+            },
             timeout=timeout,
         )
 
@@ -788,8 +802,8 @@ class TestAllowWrite:
             )
 
             if clone_result.returncode != 0:
-                print(f"Clone stderr: {clone_result.stderr.decode()}")
-                print(f"Clone stdout: {clone_result.stdout.decode()}")
+                print(f"\nClone stderr: {clone_result.stderr.decode()}")
+                print(f"\nClone stdout: {clone_result.stdout.decode()}")
 
             if not (client_repo / ".git").exists():
                 raise Exception(
@@ -807,8 +821,8 @@ class TestAllowWrite:
                 check=True,
                 capture_output=True,
             )
-            print(f"Commit result: {commit_result.stdout.decode()}")
-            print(f"Commit stderr: {commit_result.stderr.decode()}")
+            print(f"\nCommit result: {commit_result.stdout.decode()}")
+            print(f"\nCommit stderr: {commit_result.stderr.decode()}")
 
             git_log = stack.git(
                 "log",
@@ -827,8 +841,8 @@ class TestAllowWrite:
                 capture_output=True,
             )
 
-            print(f"Push stderr: {push_result.stderr.decode()}")
-            print(f"Push stdout: {push_result.stdout.decode()}")
+            print(f"\nPush stderr: {push_result.stderr.decode()}")
+            print(f"\nPush stdout: {push_result.stdout.decode()}")
             assert push_result.returncode == 0, "Push failed"
 
             verify_result = stack.git(
