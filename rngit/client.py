@@ -168,6 +168,7 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
     )
     link = RNS.Link(server_destination, on_link_established, on_link_closed)
     push_queue: list[tuple[str, str]] = []
+    fetch_queue: list[tuple[str, str]] = []
     global _linkEvent  # pylint: disable=W0602 # noqa: F999
     try:  # pylint: disable=too-many-nested-blocks
         for line in sys.stdin:
@@ -233,22 +234,8 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
                             _ = sys.stdout.write(f"ok {remote_ref}\n")
                             _ = sys.stdout.flush()
 
-                _ = sys.stdout.write("\n")
-                _ = sys.stdout.flush()
-                continue
-
-            match parts[0]:
-                case "capabilities":
-                    log.debug("CAPABILITIES")
-                    _ = sys.stdout.write("list\n")
-                    _ = sys.stdout.write("fetch\n")
-                    _ = sys.stdout.write("push\n")
-                    _ = sys.stdout.write("\n")
-                    _ = sys.stdout.flush()
-
-                case "fetch":
-                    sha, ref = parts[1].rstrip().split(" ", maxsplit=1)
-                    log.debug("FETCH %s %s", sha, ref)
+                while fetch_queue:
+                    sha, ref = fetch_queue.pop(0)
                     err, data = request(link, "fetch", f"{sha} {ref}".encode())
                     if err is not None:
                         _ = sys.stderr.write(err)
@@ -271,7 +258,27 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
                             stdout=subprocess.DEVNULL,
                         )
 
+                _ = sys.stdout.write("\n")
+                _ = sys.stdout.flush()
+                continue
+
+            match parts[0]:
+                case "capabilities":
+                    log.debug("CAPABILITIES")
+                    _ = sys.stdout.write("list\n")
+                    _ = sys.stdout.write("fetch\n")
+                    _ = sys.stdout.write("push\n")
+                    _ = sys.stdout.write("\n")
+                    _ = sys.stdout.flush()
+
+                case "fetch":
+                    push_queue.clear()
+                    sha, ref = parts[1].rstrip().split(" ", maxsplit=1)
+                    log.debug("FETCH %s %s", sha, ref)
+                    fetch_queue.append((sha, ref))
+
                 case "push":
+                    fetch_queue.clear()
                     local_ref, remote_ref = parts[1].rstrip().split(":", maxsplit=1)
                     log.debug("PUSH %s %s", local_ref, remote_ref)
                     push_queue.append((local_ref, remote_ref))

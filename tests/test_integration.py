@@ -333,7 +333,7 @@ class IntegrationStack:
             self.server_proc.kill()
             _ = self.server_proc.wait()
 
-        print(self.server_proc.stdout)
+        print(f"{self.server_proc.stdout}")
 
 
 def _init_git_repo(repo: Path) -> None:
