@@ -525,6 +525,7 @@ class TestAllowRead:
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
         stack.init_git_repo(repo_dir)
         correct_hash = stack.get_client_identity()
+        assert correct_hash != alt_identity.hexhash, "Failed to generate a new identity"
         stack.start_server(allow_read=[correct_hash])
         try:
             result = stack.run_client("list\n\n", alt_identity_path)
@@ -802,6 +803,7 @@ class TestAllowWrite:
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
         stack.init_git_repo(repo_dir)
         correct_hash = stack.get_client_identity()
+        assert correct_hash != alt_identity.hexhash, "Failed to generate a new identity"
         _ = stack.get_alternate_client_identity()
         stack.start_server(allow_write=[correct_hash])
         try:
