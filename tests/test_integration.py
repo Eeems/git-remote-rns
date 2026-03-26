@@ -334,6 +334,7 @@ class TestPublicAccess:
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
         stack.start_server(allow_all_read=True)
+        time.sleep(0.1)  # Wait for server to be ready
         try:
             result = stack.run_client("capabilities\n\n")
             output = result.stdout + result.stderr
@@ -353,6 +354,7 @@ class TestPublicAccess:
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
         stack.start_server(allow_all_read=True)
+        time.sleep(0.1)  # Wait for server to be ready
         try:
             result = stack.run_client("list\n\n")
             output = result.stdout + result.stderr
@@ -373,6 +375,7 @@ class TestPublicAccess:
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
         stack.start_server(allow_all_read=True)
+        time.sleep(0.1)  # Wait for server to be ready
         try:
             result = stack.run_client("fetch HEAD refs/heads/main\n\n")
             output = result.stdout + result.stderr
@@ -394,6 +397,7 @@ class TestPublicAccess:
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
         stack.start_server(allow_all_read=True)
+        time.sleep(0.1)  # Wait for server to be ready
         try:
             result = stack.run_client("fetch HEAD refs/heads/main\n\n")
             output = result.stdout + result.stderr
@@ -417,6 +421,7 @@ class TestAllowRead:
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
         client_hash = stack.get_client_identity()
         stack.start_server(allow_read=[client_hash])
+        time.sleep(0.1)  # Wait for server to be ready
         try:
             result = stack.run_client("list\n\n")
             output = result.stdout + result.stderr
@@ -437,6 +442,7 @@ class TestAllowRead:
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
         client_hash = stack.get_client_identity()
         stack.start_server(allow_read=[client_hash])
+        time.sleep(0.1)  # Wait for server to be ready
         try:
             result = stack.run_client("fetch HEAD refs/heads/main\n\n")
             output = result.stdout + result.stderr
@@ -455,6 +461,7 @@ class TestAllowRead:
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
         client_hash = stack.get_client_identity()
         stack.start_server(allow_read=[client_hash])
+        time.sleep(0.1)  # Wait for server to be ready
         try:
             result = stack.run_client("list\nfor-push\n\n")
             output = result.stdout + result.stderr
@@ -483,6 +490,7 @@ class TestAllowRead:
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
         correct_hash = stack.get_client_identity()
         stack.start_server(allow_read=[correct_hash])
+        time.sleep(0.1)  # Wait for server to be ready
         try:
             env = {**os.environ, "RNS_CONFIG_PATH": str(alt_rns_config)}
             venv_bin = pathlib.Path(sys.executable).parent
@@ -520,6 +528,7 @@ class TestAllowWrite:
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
         client_hash = stack.get_client_identity()
         stack.start_server(allow_write=[client_hash])
+        time.sleep(0.1)  # Wait for server to be ready
         try:
             result = stack.run_client("list\n\n")
             output = result.stdout + result.stderr
@@ -540,6 +549,7 @@ class TestAllowWrite:
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
         client_hash = stack.get_client_identity()
         stack.start_server(allow_write=[client_hash])
+        time.sleep(0.1)  # Wait for server to be ready
         try:
             result = stack.run_client("fetch HEAD refs/heads/main\n\n")
             output = result.stdout + result.stderr
@@ -558,6 +568,7 @@ class TestAllowWrite:
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
         client_hash = stack.get_client_identity()
         stack.start_server(allow_write=[client_hash])
+        time.sleep(0.1)  # Wait for server to be ready
         try:
             result = stack.run_client("list\nfor-push\n\n")
             output = result.stdout + result.stderr
@@ -578,6 +589,7 @@ class TestAllowWrite:
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
         client_hash = stack.get_client_identity()
         stack.start_server(allow_write=[client_hash])
+        time.sleep(0.1)  # Wait for server to be ready
         try:
             result = stack.run_client("push HEAD:refs/heads/new-branch\n\n")
             output = result.stdout + result.stderr
@@ -600,6 +612,7 @@ class TestAllowWrite:
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
         client_hash = stack.get_client_identity()
         stack.start_server(allow_write=[client_hash])
+        time.sleep(0.1)  # Wait for server to be ready
         try:
             result = stack.run_client("push HEAD:refs/heads/feature\n\n")
             output = result.stdout + result.stderr
@@ -618,6 +631,7 @@ class TestAllowWrite:
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
         client_hash = stack.get_client_identity()
         stack.start_server(allow_write=[client_hash])
+        time.sleep(0.1)  # Wait for server to be ready
         try:
             result = stack.run_client("push HEAD:refs/heads/feature\n\n")
             output = result.stdout + result.stderr
@@ -659,6 +673,7 @@ class TestAllowWrite:
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
         client_hash = stack.get_client_identity()
         stack.start_server(allow_write=[client_hash])
+        time.sleep(0.1)  # Wait for server to be ready
         try:
             result = stack.run_client("push :refs/heads/feature\n\n")
             output = result.stdout + result.stderr
@@ -683,6 +698,7 @@ class TestAllowWrite:
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
         client_hash = stack.get_client_identity()
         stack.start_server(allow_write=[client_hash])
+        time.sleep(0.1)  # Wait for server to be ready
         try:
             client_repo = stack.create_client_working_dir()
 
@@ -770,6 +786,7 @@ class TestAllowWrite:
         correct_hash = stack.get_client_identity()
         _ = stack.get_alternate_client_identity()
         stack.start_server(allow_write=[correct_hash])
+        time.sleep(0.1)  # Wait for server to be ready
         try:
             result = stack.run_client("push HEAD:refs/heads/main\n\n")
             output = result.stdout + result.stderr
@@ -791,6 +808,7 @@ class TestNoAuth:
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
         stack.start_server()
+        time.sleep(0.1)  # Wait for server to be ready
         try:
             result = stack.run_client("list\n\n")
             output = result.stdout + result.stderr
@@ -810,6 +828,7 @@ class TestNoAuth:
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
         stack.start_server()
+        time.sleep(0.1)  # Wait for server to be ready
         try:
             result = stack.run_client("list\nfor-push\n\n")
             output = result.stdout + result.stderr
@@ -829,6 +848,7 @@ class TestNoAuth:
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
         stack.start_server()
+        time.sleep(0.1)  # Wait for server to be ready
         try:
             result = stack.run_client("push HEAD:refs/heads/main\n\n")
             output = result.stdout + result.stderr
@@ -848,6 +868,7 @@ class TestNoAuth:
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
         stack.start_server()
+        time.sleep(0.1)  # Wait for server to be ready
         try:
             result = stack.run_client("fetch HEAD refs/heads/main\n\n")
             output = result.stdout + result.stderr
