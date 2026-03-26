@@ -63,22 +63,28 @@ def shared_rnsd():
     )
 
     # Wait for rnsd to be up
+    timeout = 10
     start = time.time()
-    while subprocess.run(
-        ["rnstatus", "--config", str(config_dir), "-a"],
-        stdin=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    ).returncode:
-        if time.time() - start < 20.0:
-            continue
-
+    while True:
         # Output error message, but maybe not if it somehow works now.
-        if not subprocess.run(
-            ["rnstatus", "--config", str(config_dir), "-a"],
-            stdin=subprocess.STDOUT,
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "RNS.Utilities.rnstatus",
+                "--config",
+                str(config_dir),
+                "-a",
+            ],
+            stdin=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-        ).returncode:
+            text=True,
+        )
+        if not proc.returncode:
             break
+
+        if time.time() - start < timeout:
+            continue
 
         rnsd_proc.terminate()
         try:
@@ -95,7 +101,10 @@ def shared_rnsd():
             rnsd_proc.stderr.read().decode() if rnsd_proc.stderr is not None else ""
         )
         raise Exception(
-            f"RNS shared instance failed to start in 20 seconds...\n  stdout: {stdout}\n  stderr:{stderr}"
+            f"RNS shared instance failed to start in {timeout} seconds..."
+            + f"\n  stdout: {stdout}"
+            + f"\n  stderr: {stderr}"
+            + f"\n  rnstatus: {proc.stdout or ''}"
         )
 
     _rnsd_process = rnsd_proc
