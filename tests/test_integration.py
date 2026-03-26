@@ -493,7 +493,6 @@ class TestAllowRead:
             stack.cleanup()
 
     def test_wrong_identity_denied(self, tmp_path: Path) -> None:
-        # TODO dtermine why this test is slow
         if not _rnsd_config_dir:
             raise Exception("RNS not available")
 
@@ -512,7 +511,7 @@ class TestAllowRead:
         correct_hash = stack.get_client_identity()
         stack.start_server(allow_read=[correct_hash])
         try:
-            result = stack.run_client("list\n\n", alt_identity_path, alt_rns_config)
+            result = stack.run_client("list\n\n", alt_identity_path)
             output = result.stdout + result.stderr
             assert "Not allowed" in output or result.returncode != 0, (
                 f"Expected wrong identity to be denied, got: {output}"
@@ -792,7 +791,8 @@ class TestAllowWrite:
         stack.start_server(allow_write=[correct_hash])
         try:
             result = stack.run_client(
-                "push HEAD:refs/heads/main\n\n", alt_identity_path, alt_rns_config
+                "push HEAD:refs/heads/main\n\n",
+                alt_identity_path,
             )
             output = result.stdout + result.stderr
             assert "Not allowed" in output or result.returncode != 0, (
