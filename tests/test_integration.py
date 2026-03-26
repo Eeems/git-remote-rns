@@ -333,36 +333,38 @@ class IntegrationStack:
             self.server_proc.kill()
             _ = self.server_proc.wait()
 
-        print(f"{self.server_proc.stdout}")
+        if self.server_proc.stdout is not None:
+            print(self.server_proc.stdout.read())
 
-
-def _init_git_repo(repo: Path) -> None:
-    _ = subprocess.run(["git", "init"], cwd=repo, capture_output=True, check=True)
-    _ = subprocess.run(
-        ["git", "config", "user.email", "test@test.com"],
-        cwd=repo,
-        capture_output=True,
-        check=True,
-    )
-    _ = subprocess.run(
-        ["git", "config", "user.name", "Test User"],
-        cwd=repo,
-        capture_output=True,
-    )
-    _ = (repo / "test.txt").write_text("hello")
-    _ = subprocess.run(["git", "add", "."], cwd=repo, capture_output=True, check=True)
-    _ = subprocess.run(
-        ["git", "commit", "-m", "init"],
-        cwd=repo,
-        capture_output=True,
-        check=True,
-    )
-    _ = subprocess.run(
-        ["git", "branch", "-m", "main"],
-        cwd=repo,
-        capture_output=True,
-        check=True,
-    )
+    def init_git_repo(self, repo: Path) -> None:
+        _ = subprocess.run(["git", "init"], cwd=repo, capture_output=True, check=True)
+        _ = subprocess.run(
+            ["git", "config", "user.email", "test@test.com"],
+            cwd=repo,
+            capture_output=True,
+            check=True,
+        )
+        _ = subprocess.run(
+            ["git", "config", "user.name", "Test User"],
+            cwd=repo,
+            capture_output=True,
+        )
+        _ = (repo / "test.txt").write_text("hello")
+        _ = subprocess.run(
+            ["git", "add", "."], cwd=repo, capture_output=True, check=True
+        )
+        _ = subprocess.run(
+            ["git", "commit", "-m", "init"],
+            cwd=repo,
+            capture_output=True,
+            check=True,
+        )
+        _ = subprocess.run(
+            ["git", "branch", "-m", "main"],
+            cwd=repo,
+            capture_output=True,
+            check=True,
+        )
 
 
 class TestPublicAccess:
@@ -372,9 +374,9 @@ class TestPublicAccess:
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
-        _init_git_repo(repo_dir)
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
+        stack.init_git_repo(repo_dir)
         stack.start_server(allow_all_read=True)
         try:
             result = stack.run_client("capabilities\n\n")
@@ -391,9 +393,9 @@ class TestPublicAccess:
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
-        _init_git_repo(repo_dir)
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
+        stack.init_git_repo(repo_dir)
         stack.start_server(allow_all_read=True)
         try:
             result = stack.run_client("list\n\n")
@@ -411,9 +413,9 @@ class TestPublicAccess:
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
-        _init_git_repo(repo_dir)
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
+        stack.init_git_repo(repo_dir)
         stack.start_server(allow_all_read=True)
         try:
             result = stack.run_client("fetch HEAD refs/heads/main\n\n")
@@ -432,9 +434,9 @@ class TestPublicAccess:
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
-        _init_git_repo(repo_dir)
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
+        stack.init_git_repo(repo_dir)
         stack.start_server(allow_all_read=True)
         try:
             result = stack.run_client("fetch HEAD refs/heads/main\n\n")
@@ -454,9 +456,9 @@ class TestAllowRead:
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
-        _init_git_repo(repo_dir)
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
+        stack.init_git_repo(repo_dir)
         client_hash = stack.get_client_identity()
         stack.start_server(allow_read=[client_hash])
         try:
@@ -474,9 +476,9 @@ class TestAllowRead:
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
-        _init_git_repo(repo_dir)
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
+        stack.init_git_repo(repo_dir)
         client_hash = stack.get_client_identity()
         stack.start_server(allow_read=[client_hash])
         try:
@@ -492,9 +494,9 @@ class TestAllowRead:
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
-        _init_git_repo(repo_dir)
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
+        stack.init_git_repo(repo_dir)
         client_hash = stack.get_client_identity()
         stack.start_server(allow_read=[client_hash])
         try:
@@ -512,7 +514,6 @@ class TestAllowRead:
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
-        _init_git_repo(repo_dir)
 
         alt_rns_config = tmp_path / "rns_alt"
         alt_rns_config.mkdir()
@@ -522,6 +523,7 @@ class TestAllowRead:
         _ = alt_identity.to_file(str(alt_identity_path))  # pyright: ignore[reportUnknownMemberType]
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
+        stack.init_git_repo(repo_dir)
         correct_hash = stack.get_client_identity()
         stack.start_server(allow_read=[correct_hash])
         try:
@@ -541,9 +543,9 @@ class TestAllowWrite:
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
-        _init_git_repo(repo_dir)
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
+        stack.init_git_repo(repo_dir)
         client_hash = stack.get_client_identity()
         stack.start_server(allow_write=[client_hash])
         try:
@@ -561,9 +563,9 @@ class TestAllowWrite:
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
-        _init_git_repo(repo_dir)
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
+        stack.init_git_repo(repo_dir)
         client_hash = stack.get_client_identity()
         stack.start_server(allow_write=[client_hash])
         try:
@@ -579,9 +581,9 @@ class TestAllowWrite:
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
-        _init_git_repo(repo_dir)
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
+        stack.init_git_repo(repo_dir)
         client_hash = stack.get_client_identity()
         stack.start_server(allow_write=[client_hash])
         try:
@@ -599,9 +601,9 @@ class TestAllowWrite:
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
-        _init_git_repo(repo_dir)
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
+        stack.init_git_repo(repo_dir)
         client_hash = stack.get_client_identity()
         stack.start_server(allow_write=[client_hash])
         try:
@@ -621,9 +623,9 @@ class TestAllowWrite:
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
-        _init_git_repo(repo_dir)
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
+        stack.init_git_repo(repo_dir)
         client_hash = stack.get_client_identity()
         stack.start_server(allow_write=[client_hash])
         try:
@@ -639,9 +641,9 @@ class TestAllowWrite:
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
-        _init_git_repo(repo_dir)
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
+        stack.init_git_repo(repo_dir)
         client_hash = stack.get_client_identity()
         stack.start_server(allow_write=[client_hash])
         try:
@@ -673,16 +675,15 @@ class TestAllowWrite:
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
-        _init_git_repo(repo_dir)
 
+        stack = IntegrationStack(_rnsd_config_dir, repo_dir)
+        stack.init_git_repo(repo_dir)
         _ = subprocess.run(
             ["git", "checkout", "-b", "feature"], cwd=repo_dir, capture_output=True
         )
         _ = subprocess.run(
             ["git", "checkout", "main"], cwd=repo_dir, capture_output=True
         )
-
-        stack = IntegrationStack(_rnsd_config_dir, repo_dir)
         client_hash = stack.get_client_identity()
         stack.start_server(allow_write=[client_hash])
         try:
@@ -704,9 +705,9 @@ class TestAllowWrite:
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
-        _init_git_repo(repo_dir)
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
+        stack.init_git_repo(repo_dir)
         client_hash = stack.get_client_identity()
         stack.start_server(allow_write=[client_hash])
         try:
@@ -790,7 +791,6 @@ class TestAllowWrite:
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
-        _init_git_repo(repo_dir)
 
         alt_rns_config = tmp_path / "rns_alt"
         alt_rns_config.mkdir()
@@ -800,6 +800,7 @@ class TestAllowWrite:
         _ = alt_identity.to_file(str(alt_identity_path))  # pyright: ignore[reportUnknownMemberType]
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
+        stack.init_git_repo(repo_dir)
         correct_hash = stack.get_client_identity()
         _ = stack.get_alternate_client_identity()
         stack.start_server(allow_write=[correct_hash])
@@ -823,9 +824,9 @@ class TestNoAuth:
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
-        _init_git_repo(repo_dir)
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
+        stack.init_git_repo(repo_dir)
         stack.start_server()
         try:
             result = stack.run_client("list\n\n")
@@ -842,9 +843,9 @@ class TestNoAuth:
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
-        _init_git_repo(repo_dir)
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
+        stack.init_git_repo(repo_dir)
         stack.start_server()
         try:
             result = stack.run_client("list\nfor-push\n\n")
@@ -861,9 +862,9 @@ class TestNoAuth:
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
-        _init_git_repo(repo_dir)
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
+        stack.init_git_repo(repo_dir)
         stack.start_server()
         try:
             result = stack.run_client("push HEAD:refs/heads/main\n\n")
@@ -880,9 +881,9 @@ class TestNoAuth:
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
-        _init_git_repo(repo_dir)
 
         stack = IntegrationStack(_rnsd_config_dir, repo_dir)
+        stack.init_git_repo(repo_dir)
         stack.start_server()
         try:
             result = stack.run_client("fetch HEAD refs/heads/main\n\n")
