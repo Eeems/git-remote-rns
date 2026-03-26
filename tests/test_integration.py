@@ -49,23 +49,26 @@ def shared_rnsd():
     rns_config = config_dir / "config"
     _ = rns_config.write_text(RETICULUM_CONFIG)
 
-    rnsd_proc = subprocess.Popen(
-        [
-            sys.executable,
-            "-m",
-            "RNS.Utilities.rnsd",
-            "--config",
-            str(config_dir),
-            "-vvv",
-        ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-    )
-
     # Wait for rnsd to be up
-    timeout = 10
+    tries = 3
+    timeout = 5
     start = time.time()
+    rnsd_proc = None
     while True:
+        if rnsd_proc is None:
+            rnsd_proc = subprocess.Popen(
+                [
+                    sys.executable,
+                    "-m",
+                    "RNS.Utilities.rnsd",
+                    "--config",
+                    str(config_dir),
+                    "-vvv",
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+            )
+
         if rnsd_proc.returncode is not None:
             stdout = (
                 rnsd_proc.stdout.read().decode() if rnsd_proc.stdout is not None else ""
@@ -102,6 +105,11 @@ def shared_rnsd():
         except subprocess.TimeoutExpired:
             rnsd_proc.kill()
             _ = rnsd_proc.wait()
+
+        if tries:
+            rnsd_proc = None
+            tries -= 1
+            continue
 
         stdout = (
             rnsd_proc.stdout.read().decode() if rnsd_proc.stdout is not None else ""
@@ -205,7 +213,7 @@ class IntegrationStack:
         assert dest_hash is not None, "Could not get destination hash from server"
         assert len(dest_hash) == 32, f"Invalid destination hash length: {dest_hash}"
         self.server_hash = dest_hash
-        proc = subprocess.run(
+        while subprocess.run(
             [
                 sys.executable,
                 "-m",
@@ -214,12 +222,13 @@ class IntegrationStack:
                 str(self.rns_config),
                 "-w1",
                 dest_hash,
-            ],
-            stdin=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-        )
-        assert not proc.returncode, f"Cannot reach server: {proc.stdout}"
+            ]
+        ).returncode:
+            if self.server_proc.returncode is not None:
+                raise Exception(
+                    f"Server exited early: {self.server_proc.returncode}\n"
+                    + f"{self.server_proc.stdout}"
+                )
 
     def run_client(
         self,
