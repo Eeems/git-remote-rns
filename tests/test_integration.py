@@ -553,7 +553,7 @@ class TestAllowRead:
         client_hash = stack.get_client_identity()
         stack.start_server(allow_read=[client_hash])
         try:
-            result = stack.run_client("list\nfor-push\n\n")
+            result = stack.run_client("list for-push\n\n")
             output = result.stdout + result.stderr
             assert "Not allowed" in output or result.returncode != 0, (
                 f"Expected list-for-push to fail without write access, got: {output}"
@@ -649,7 +649,7 @@ class TestAllowWrite:
         client_hash = stack.get_client_identity()
         stack.start_server(allow_write=[client_hash])
         try:
-            result = stack.run_client("list\nfor-push\n\n")
+            result = stack.run_client("list for-push\n\n")
             output = result.stdout + result.stderr
             assert "Not allowed" not in output, (
                 f"Expected list-for-push to work with write access, got: {output}"
@@ -935,7 +935,7 @@ class TestNoAuth:
         stack.init_git_repo(repo_dir)
         stack.start_server()
         try:
-            result = stack.run_client("list\nfor-push\n\n")
+            result = stack.run_client("list for-push\n\n")
             output = result.stdout + result.stderr
             assert "Not allowed" in output or result.returncode != 0, (
                 f"Expected list-for-push to fail without auth, got: {output}"
