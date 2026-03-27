@@ -14,6 +14,7 @@ import RNS
 from . import __version__
 from .shared import (
     APP_NAME,
+    ExitCodes,
     configure_logging,
     is_valid_hexhash,
     packets,
@@ -22,6 +23,7 @@ from .shared import (
 __all__ = [
     "main",
 ]
+
 
 log: logging.Logger = logging.getLogger(__name__)
 
@@ -165,7 +167,7 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
     destination_hexhash = parts[0]
     if not is_valid_hexhash(destination_hexhash):
         log.error("error: Invalid URL. Hexhash invalid: %s", destination_hexhash)
-        return 1
+        return ExitCodes.BAD_ARGUMENT.value
 
     destination = bytes.fromhex(destination_hexhash)
 
@@ -197,12 +199,12 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
         RNS.Transport.request_path(destination)  # pyright: ignore[reportUnknownMemberType]
         if not RNS.Transport.await_path(destination, 30):  # pyright: ignore[reportUnknownMemberType]
             log.error("Timed out waiting for path")
-            return 1
+            return ExitCodes.NETWORK_ERROR.value
 
     server_identity = RNS.Identity.recall(destination)  # pyright: ignore[reportUnknownMemberType]
     if server_identity is None:
         log.error("Failed to get server identity")
-        return 1
+        return ExitCodes.NETWORK_ERROR.value
 
     server_destination = RNS.Destination(
         server_identity,
@@ -240,7 +242,7 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
                         if err is not None:
                             _ = sys.stderr.write(err)
                             _ = sys.stderr.write("\n")
-                            return 1
+                            return ExitCodes.REMOTE_ERROR.value
 
                         if data:
                             _ = sys.stderr.buffer.write(data)
@@ -271,7 +273,7 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
                                 msg = f"error {remote_ref} {c_style_quote(err)}\n"
                                 log.debug(msg)
                                 _ = sys.stdout.write(msg)
-                                return 1
+                                return ExitCodes.REMOTE_ERROR.value
 
                             assert not data  # nosec B101
                             msg = f"ok {remote_ref}\n"
@@ -284,7 +286,7 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
                     if err is not None:
                         _ = sys.stderr.write(err)
                         _ = sys.stderr.write("\n")
-                        return 1
+                        return ExitCodes.REMOTE_ERROR.value
 
                     assert data is not None  # nosec B101
                     with TemporaryDirectory() as tmpdir:
@@ -342,7 +344,7 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
                     if err is not None:
                         _ = sys.stderr.write(err)
                         _ = sys.stderr.write("\n")
-                        return 1
+                        return ExitCodes.REMOTE_ERROR.value
 
                     assert data is not None  # nosec B101
                     _ = sys.stdout.buffer.write(data)
@@ -351,16 +353,16 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
 
                 case _:
                     _ = sys.stderr.write(f"Unknown command: {parts[0]}\n")
-                    return 1
+                    return ExitCodes.UNKOWN_COMMAND.value
 
         log.debug("End of stdin")
 
     except Exception:
         log.error(traceback.format_exc())
-        return 1
+        return ExitCodes.EXCEPTION.value
 
     finally:
         log.debug("Closing link")
         link.teardown()
 
-    return 0
+    return ExitCodes.SUCCESS.value

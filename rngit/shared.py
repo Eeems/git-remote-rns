@@ -1,3 +1,4 @@
+import errno
 import logging
 import string
 import sys
@@ -28,3 +29,12 @@ def is_valid_hexhash(hexhash: str) -> bool:
     return len(hexhash) == EXPECTED_HEXHASH_LENGTH and all(
         c in string.hexdigits for c in hexhash
     )
+
+
+class ExitCodes(Enum):
+    SUCCESS = 0
+    EXCEPTION = -errno.EFAULT
+    UNKOWN_COMMAND = -errno.EBADRQC
+    REMOTE_ERROR = -errno.EBADMSG
+    BAD_ARGUMENT = -errno.EINVAL
+    NETWORK_ERROR = -errno.ECANCELED
