@@ -32,6 +32,11 @@ _identity: RNS.Identity | None = None
 _repo_path: str | None = None
 
 
+def log_and_stdout(msg: str):
+    log.debug(msg)
+    _ = sys.stdout.write(msg)
+
+
 def on_link_established(link: RNS.Link):
     global _identity  # pylint: disable=W0602 # noqa: F999
     assert _identity is not None  # nosec B101
@@ -222,12 +227,16 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
             if not line:
                 continue
 
-            log.debug("STDIN '%s'", line.encode())
+            log.debug("STDIN %s", line.encode())
 
             parts = cast(list[str], line.split(maxsplit=1))
             assert isinstance(parts, list)  # nosec B101
             if not parts:
                 log.debug("\\n")
+                if not push_queue and not fetch_queue:
+                    log.debug("\\n but no queue was built, skipping status reporting")
+                    continue
+
                 while push_queue:
                     local_ref, remote_ref = push_queue.pop(0)
                     if local_ref.startswith("+"):
@@ -242,7 +251,11 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
                         if err is not None:
                             _ = sys.stderr.write(err)
                             _ = sys.stderr.write("\n")
-                            return ExitCodes.REMOTE_ERROR.value
+                            log_and_stdout(f"error {remote_ref} {c_style_quote(err)}\n")
+
+                        else:
+                            assert not data  # nosec B101
+                            log_and_stdout(f"ok {remote_ref}\n")
 
                         if data:
                             _ = sys.stderr.buffer.write(data)
@@ -270,15 +283,13 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
                                 f"{local_ref}:{remote_ref}\n".encode() + data,
                             )
                             if err is not None:
-                                msg = f"error {remote_ref} {c_style_quote(err)}\n"
-                                log.debug(msg)
-                                _ = sys.stdout.write(msg)
-                                return ExitCodes.REMOTE_ERROR.value
+                                log_and_stdout(
+                                    f"error {remote_ref} {c_style_quote(err)}\n"
+                                )
 
-                            assert not data  # nosec B101
-                            msg = f"ok {remote_ref}\n"
-                            log.debug(msg)
-                            _ = sys.stdout.write(msg)
+                            else:
+                                assert not data  # nosec B101
+                                log_and_stdout(f"ok {remote_ref}\n")
 
                 while fetch_queue:
                     sha, ref = fetch_queue.pop(0)
@@ -299,16 +310,27 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
                             stderr=subprocess.DEVNULL,
                         )
                         _ = subprocess.check_call(  # nosec B607 B603
-                            ["git", "bundle", "unbundle", "--progress", bundle, ref],
+                            [
+                                "git",
+                                "bundle",
+                                "unbundle",
+                                "--progress",
+                                bundle,
+                                ref,
+                            ],
                             stdout=subprocess.DEVNULL,
                         )
 
                 _ = sys.stderr.flush()
+                log.debug("Finished batch processing")
+                _ = sys.stdout.write("\n")
                 try:
-                    _ = sys.stdout.write("\n")
                     _ = sys.stdout.flush()
 
                 except BrokenPipeError:
+                    log.error(
+                        "Parent process closed stdout early, this should not have happened"
+                    )
                     break
 
                 continue
