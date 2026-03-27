@@ -1,7 +1,6 @@
 import argparse
 import logging
 import os
-import signal
 import subprocess  # noqa: B404
 import sys
 import threading
@@ -15,6 +14,7 @@ import RNS
 from . import __version__
 from .shared import (
     APP_NAME,
+    ExitCodes,
     configure_logging,
     is_valid_hexhash,
     packets,
@@ -24,11 +24,17 @@ __all__ = [
     "main",
 ]
 
+
 log: logging.Logger = logging.getLogger(__name__)
 
 _linkEvent: threading.Event = threading.Event()
 _identity: RNS.Identity | None = None
 _repo_path: str | None = None
+
+
+def log_and_stdout(msg: str):
+    log.debug(msg)
+    _ = sys.stdout.write(msg)
 
 
 def on_link_established(link: RNS.Link):
@@ -90,6 +96,50 @@ def request(
             return f"Invalid status: {receipt.get_status()}", None
 
 
+def c_style_quote(value: bytes | str) -> str:
+    if isinstance(value, bytes):
+        value = value.decode()
+
+    escaped = '"'
+    for char in value:
+        match char:
+            case "\\":
+                escaped += "\\\\"
+
+            case '"':
+                escaped += '\\"'
+
+            case "\n":
+                escaped += "\\n"
+
+            case "\t":
+                escaped += "\\t"
+
+            case "\r":
+                escaped += "\\r"
+
+            case "\b":
+                escaped += "\\b"
+
+            case "\f":
+                escaped += "\\f"
+
+            case "\a":
+                escaped += "\\a"
+
+            case "\v":
+                escaped += "\\v"
+
+            case _:
+                if ord(char) < 32 or ord(char) > 126:  # non-printable
+                    escaped += f"\\x{ord(char):02x}"
+
+                else:
+                    escaped += char
+
+    return escaped + '"'
+
+
 def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
     parser = argparse.ArgumentParser(prog="git-remote-rns")
     _ = parser.add_argument("remote", help="Remote name (ignored)")
@@ -114,7 +164,7 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
 
     assert isinstance(args.verbose, bool)  # pyright: ignore[reportAny] # nosec B101
     verbose = args.verbose or bool(os.environ.get("VERBOSE", 0))
-    configure_logging(logging.DEBUG if verbose else logging.WARNING)
+    configure_logging("git-remote-rns", logging.DEBUG if verbose else logging.WARNING)
 
     assert isinstance(args.url, str)  # pyright: ignore[reportAny] # nosec B101
     url = args.url
@@ -122,7 +172,7 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
     destination_hexhash = parts[0]
     if not is_valid_hexhash(destination_hexhash):
         log.error("error: Invalid URL. Hexhash invalid: %s", destination_hexhash)
-        return 1
+        return ExitCodes.BAD_ARGUMENT.value
 
     destination = bytes.fromhex(destination_hexhash)
 
@@ -154,12 +204,12 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
         RNS.Transport.request_path(destination)  # pyright: ignore[reportUnknownMemberType]
         if not RNS.Transport.await_path(destination, 30):  # pyright: ignore[reportUnknownMemberType]
             log.error("Timed out waiting for path")
-            return 1
+            return ExitCodes.NETWORK_ERROR.value
 
     server_identity = RNS.Identity.recall(destination)  # pyright: ignore[reportUnknownMemberType]
     if server_identity is None:
         log.error("Failed to get server identity")
-        return 1
+        return ExitCodes.NETWORK_ERROR.value
 
     server_destination = RNS.Destination(
         server_identity,
@@ -169,6 +219,7 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
     )
     link = RNS.Link(server_destination, on_link_established, on_link_closed)
     push_queue: list[tuple[str, str]] = []
+    fetch_queue: list[tuple[str, str]] = []
     global _linkEvent  # pylint: disable=W0602 # noqa: F999
     try:  # pylint: disable=too-many-nested-blocks
         for line in sys.stdin:
@@ -176,12 +227,16 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
             if not line:
                 continue
 
-            log.debug("STDIN '%s'", line.rstrip())
+            log.debug("STDIN %s", line.encode())
 
             parts = cast(list[str], line.split(maxsplit=1))
             assert isinstance(parts, list)  # nosec B101
             if not parts:
                 log.debug("\\n")
+                if not push_queue and not fetch_queue:
+                    log.debug("\\n but no queue was built, skipping status reporting")
+                    continue
+
                 while push_queue:
                     local_ref, remote_ref = push_queue.pop(0)
                     if local_ref.startswith("+"):
@@ -196,13 +251,15 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
                         if err is not None:
                             _ = sys.stderr.write(err)
                             _ = sys.stderr.write("\n")
-                            _ = sys.stderr.flush()
-                            return 1
+                            log_and_stdout(f"error {remote_ref} {c_style_quote(err)}\n")
+
+                        else:
+                            assert not data  # nosec B101
+                            log_and_stdout(f"ok {remote_ref}\n")
 
                         if data:
                             _ = sys.stderr.buffer.write(data)
                             _ = sys.stderr.buffer.write(b"\n")
-                            _ = sys.stderr.flush()
 
                     else:
                         with TemporaryDirectory() as tmpdir:
@@ -226,23 +283,55 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
                                 f"{local_ref}:{remote_ref}\n".encode() + data,
                             )
                             if err is not None:
-                                _ = sys.stderr.write(err)
-                                _ = sys.stderr.write("\n")
-                                _ = sys.stderr.flush()
-                                return 1
+                                log_and_stdout(
+                                    f"error {remote_ref} {c_style_quote(err)}\n"
+                                )
 
-                            if data:
-                                _ = sys.stderr.buffer.write(data)
-                                _ = sys.stderr.buffer.write(b"\n")
-                                _ = sys.stderr.flush()
+                            else:
+                                assert not data  # nosec B101
+                                log_and_stdout(f"ok {remote_ref}\n")
 
+                while fetch_queue:
+                    sha, ref = fetch_queue.pop(0)
+                    err, data = request(link, "fetch", f"{sha} {ref}".encode())
+                    if err is not None:
+                        _ = sys.stderr.write(err)
+                        _ = sys.stderr.write("\n")
+                        return ExitCodes.REMOTE_ERROR.value
+
+                    assert data is not None  # nosec B101
+                    with TemporaryDirectory() as tmpdir:
+                        bundle = os.path.join(tmpdir, f"{sha}.bundle")
+                        with open(bundle, "wb") as f:
+                            _ = f.write(data)
+
+                        _ = subprocess.check_call(  # nosec B607 B603
+                            ["git", "bundle", "verify", "--quiet", bundle],
+                            stderr=subprocess.DEVNULL,
+                        )
+                        _ = subprocess.check_call(  # nosec B607 B603
+                            [
+                                "git",
+                                "bundle",
+                                "unbundle",
+                                "--progress",
+                                bundle,
+                                ref,
+                            ],
+                            stdout=subprocess.DEVNULL,
+                        )
+
+                _ = sys.stderr.flush()
+                log.debug("Finished batch processing")
                 _ = sys.stdout.write("\n")
                 try:
                     _ = sys.stdout.flush()
 
                 except BrokenPipeError:
-                    # Ignoring as git likes to close stdout early
-                    pass
+                    log.error(
+                        "Parent process closed stdout early, this should not have happened"
+                    )
+                    break
 
                 continue
 
@@ -256,31 +345,13 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
                     _ = sys.stdout.flush()
 
                 case "fetch":
+                    push_queue.clear()
                     sha, ref = parts[1].rstrip().split(" ", maxsplit=1)
                     log.debug("FETCH %s %s", sha, ref)
-                    err, data = request(link, "fetch", f"{sha} {ref}".encode())
-                    if err is not None:
-                        _ = sys.stderr.write(err)
-                        _ = sys.stderr.write("\n")
-                        _ = sys.stderr.flush()
-                        return 1
-
-                    assert data is not None  # nosec B101
-                    with TemporaryDirectory() as tmpdir:
-                        bundle = os.path.join(tmpdir, f"{sha}.bundle")
-                        with open(bundle, "wb") as f:
-                            _ = f.write(data)
-
-                        _ = subprocess.check_call(  # nosec B607 B603
-                            ["git", "bundle", "verify", "--quiet", bundle],
-                            stderr=subprocess.DEVNULL,
-                        )
-                        _ = subprocess.check_call(  # nosec B607 B603
-                            ["git", "bundle", "unbundle", "--progress", bundle, ref],
-                            stdout=subprocess.DEVNULL,
-                        )
+                    fetch_queue.append((sha, ref))
 
                 case "push":
+                    fetch_queue.clear()
                     local_ref, remote_ref = parts[1].rstrip().split(":", maxsplit=1)
                     log.debug("PUSH %s %s", local_ref, remote_ref)
                     push_queue.append((local_ref, remote_ref))
@@ -295,8 +366,7 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
                     if err is not None:
                         _ = sys.stderr.write(err)
                         _ = sys.stderr.write("\n")
-                        _ = sys.stderr.flush()
-                        return 1
+                        return ExitCodes.REMOTE_ERROR.value
 
                     assert data is not None  # nosec B101
                     _ = sys.stdout.buffer.write(data)
@@ -304,19 +374,17 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
                     _ = sys.stdout.flush()
 
                 case _:
-                    _ = sys.stderr.write(f"Unknown command: {parts[1]}\n")
-                    _ = sys.stderr.flush()
-                    return 1
+                    _ = sys.stderr.write(f"Unknown command: {parts[0]}\n")
+                    return ExitCodes.UNKOWN_COMMAND.value
 
         log.debug("End of stdin")
-        _ = signal.signal(signal.SIGPIPE, signal.SIG_DFL)
 
     except Exception:
         log.error(traceback.format_exc())
-        return 1
+        return ExitCodes.EXCEPTION.value
 
     finally:
         log.debug("Closing link")
         link.teardown()
 
-    return 0
+    return ExitCodes.SUCCESS.value

@@ -1,3 +1,4 @@
+import errno
 import logging
 import string
 import sys
@@ -13,13 +14,13 @@ class packets(Enum):
     PACKET_IDENTIFIED = 0x01.to_bytes(1, "big")
 
 
-def configure_logging(level: int = logging.WARNING):
+def configure_logging(name: str, level: int = logging.WARNING):
     while logging.root.handlers:
         logging.root.removeHandler(logging.root.handlers[0])
 
     logging.basicConfig(
         level=level,
-        format="%(asctime)s [%(levelname)s] %(message)s",
+        format=f"%(asctime)s {name} [%(levelname)s] %(message)s",
         stream=sys.stderr,
     )
 
@@ -28,3 +29,12 @@ def is_valid_hexhash(hexhash: str) -> bool:
     return len(hexhash) == EXPECTED_HEXHASH_LENGTH and all(
         c in string.hexdigits for c in hexhash
     )
+
+
+class ExitCodes(Enum):
+    SUCCESS = 0
+    EXCEPTION = -errno.EFAULT
+    UNKOWN_COMMAND = -errno.EBADRQC
+    REMOTE_ERROR = -errno.EBADMSG
+    BAD_ARGUMENT = -errno.EINVAL
+    NETWORK_ERROR = -errno.ECANCELED

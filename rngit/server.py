@@ -262,7 +262,7 @@ def on_push_request(
                 stderr=subprocess.PIPE,
                 check=False,
             )
-            log.debug("git bundle verifyreturn code: %d", proc.returncode)
+            log.debug("git bundle verify return code: %d", proc.returncode)
             if proc.returncode:
                 return proc.returncode.to_bytes(1, "big") + proc.stderr
 
@@ -280,8 +280,10 @@ def on_push_request(
                 check=False,
             )
             log.debug("git bundle unbundle return code: %d", proc.returncode)
+            if proc.returncode:
+                return proc.returncode.to_bytes(1, "big") + proc.stderr
 
-        return proc.returncode.to_bytes(1, "big") + proc.stderr
+        return b"\0"
 
     except Exception as e:
         traceback.print_exc()
@@ -318,7 +320,10 @@ def on_delete_request(
             check=False,
         )
         log.debug("git update-ref return code: %d", proc.returncode)
-        return b"\0" + proc.stderr
+        if proc.returncode:
+            return proc.returncode.to_bytes(1, "big") + proc.stderr
+
+        return b"\0"
 
     except Exception as e:
         traceback.print_exc()
@@ -452,7 +457,7 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
     global _read_list
     _read_list = None if allow_all_read else read_list
 
-    configure_logging(logging.DEBUG if verbose else logging.WARNING)
+    configure_logging("rngit", logging.DEBUG if verbose else logging.WARNING)
 
     _ = RNS.Reticulum(config_path, RNS.LOG_VERBOSE if verbose else RNS.LOG_WARNING)
 
@@ -483,36 +488,30 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
     log.info("Destination: %s", RNS.prettyhexrep(server_destination.hash))  # pyright: ignore[reportUnknownMemberType]
     log.info("Read list: %s", "(any)" if allow_all_read else read_list)
     log.info("Write list: %s", write_list)
-    allow_list = set(bytes.fromhex(x) for x in read_list)
     server_destination.register_request_handler(  # pyright: ignore[reportUnknownMemberType]
         "list",
         on_list_request,
         RNS.Destination.ALLOW_ALL,
-        allow_list,
     )
     server_destination.register_request_handler(  # pyright: ignore[reportUnknownMemberType]
         "list-for-push",
         on_list_request,
         RNS.Destination.ALLOW_ALL,
-        allow_list,
     )
     server_destination.register_request_handler(  # pyright: ignore[reportUnknownMemberType]
         "fetch",
         on_fetch_request,
         RNS.Destination.ALLOW_ALL,
-        allow_list,
     )
     server_destination.register_request_handler(  # pyright: ignore[reportUnknownMemberType]
         "push",
         on_push_request,
         RNS.Destination.ALLOW_ALL,
-        allow_list,
     )
     server_destination.register_request_handler(  # pyright: ignore[reportUnknownMemberType]
         "delete",
         on_delete_request,
         RNS.Destination.ALLOW_ALL,
-        allow_list,
     )
     server_destination.set_link_established_callback(on_link_established)  # pyright: ignore[reportUnknownMemberType]
 
