@@ -64,6 +64,34 @@ test: requirements ## Run tests
 	  --verbose \
 	  tests/
 
+.web:
+	mkdir -p .web
+
+test-web: .web requirements ## Run rngit-web for testing
+	@cd .web;\
+	if [ ! -d git-remote-rns ];then \
+	  git clone https://github.com/Eeems/git-remote-rns; \
+	fi
+	@cd .web;\
+	if [ ! -d empty ];then \
+	  mkdir empty; \
+	  cd empty; \
+	  git init; \
+	fi
+	@cd .web;\
+	if [ ! -d empty.git ];then \
+	  mkdir empty.git; \
+	  cd empty.git; \
+	  git init --bare; \
+	fi
+	@. ${VENV_BIN_ACTIVATE}; \
+	python -m rngit \
+	  rngit-web \
+	  --verbose \
+	  --allow-read 1b72330713792d8fb086e881c52c684c \
+	  .web
+
+
 list-tests: ## List all available tests
 	@if [ ! -f ${VENV_BIN_ACTIVATE} ];then \
 	  $(MAKE) requirements >/dev/null; \

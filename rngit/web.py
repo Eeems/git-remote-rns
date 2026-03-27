@@ -14,20 +14,45 @@ from .app import (
 from .shared import (
     configure_logging,
     find_repos,
+    is_repo,
     is_valid_hexhash,
 )
 
 log: logging.Logger = logging.getLogger(__name__)
-app = Application("nomadnetwork", ["node"])
+app = Application(
+    "nomadnetwork",
+    ["node"],
+    templates={
+        "repo-link": "`_`[{0}`:/page/repo.mu`repo={0}]`_",
+    },
+)
 
 
-@app.request("/page/index.mu", ttl=10)
-def index(_request: Request) -> bytes | None:
+@app.request("/page/index.mu", ttl=10, permissions=["read"])
+def _(_request: Request) -> bytes | None:
     assert app.args is not None
     assert isinstance(app.args.repo, str)  # pyright: ignore[reportAny]
     return b"> Repositories\n" + b"\n".join(
-        [f">>{x}".encode() for x in find_repos(app.args.repo)]
+        [b">> " + app.template("repo-link")(x) for x in find_repos(app.args.repo)]
     )
+
+
+class InvalidRepoPath(Exception):
+    pass
+
+
+@app.request("/page/repo.mu", ttl=60, permissions=["read"])
+def _(_request: Request, repo: str) -> bytes | None:
+    assert app.args is not None
+    assert isinstance(app.args.repo, str)  # pyright: ignore[reportAny]
+    if ".." in repo:
+        raise InvalidRepoPath(repo)
+
+    repo_dir = os.path.join(app.args.repo, repo)
+    if not is_repo(repo_dir):
+        raise InvalidRepoPath(repo)
+
+    return b"Hello world!"
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -140,5 +165,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     log.info("Destination: %s", RNS.prettyhexrep(app.destination.hash))  # pyright: ignore[reportUnknownMemberType]
     log.info("Read list: %s", "(any)" if allow_all_read else read_list)
+    for hexhash in read_list:
+        app.permit(hexhash, "read")
 
     app.run(args)

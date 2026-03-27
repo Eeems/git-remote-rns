@@ -10,6 +10,7 @@ from typing import (
     Any,
     Callable,
     NoReturn,
+    override,
 )
 
 import RNS
@@ -61,6 +62,10 @@ class MissingParameter(Exception):
     pass
 
 
+class TemplateExists(Exception):
+    pass
+
+
 RequestHandlerCallable = Callable[
     [
         str,
@@ -73,6 +78,38 @@ RequestHandlerCallable = Callable[
 ]
 
 
+# Hack to allow returning "Not found" errors for pages without handlers"
+class RequestHandlers(defaultdict):  # pyright: ignore[reportMissingTypeArgument]
+    def __init__(self, app: "Application"):
+        super().__init__()  # pyright: ignore[reportUnknownMemberType]
+        self._app: Application = app
+
+    @override
+    def __contains__(self, _) -> bool:
+        return True
+
+    @override
+    def __missing__(self, pathhash: bytes, /):  # pyright: ignore[reportUnknownParameterType]
+        return [  # pyright: ignore[reportUnknownVariableType]
+            "?",
+            self._app.default_handler,
+            RNS.Destination.ALLOW_ALL,
+            [],
+            True,
+        ]
+
+
+class Template:
+    def __init__(self, template: str) -> None:
+        self._template: str = template
+
+    def __call__(self, *args: object, **kwds: object) -> bytes:
+        return self._template.format(*args, **kwds).encode()
+
+    def __bytes__(self) -> bytes:
+        return self()
+
+
 class Application:
     def __init__(
         self,
@@ -80,6 +117,7 @@ class Application:
         aspects: list[str],
         announce_name: bytes | None = None,
         announce_interval: int | None = None,
+        templates: dict[str, str] | None = None,
     ) -> None:
         self.announce_name: bytes = announce_name or app_name.encode()
         self.announce_interval: int | None = announce_interval
@@ -89,10 +127,17 @@ class Application:
         self._identity: RNS.Identity | None = None
         self.handlers: dict[str, RequestHandlerCallable] = {}
         self.permissions: defaultdict[str, list[str]] = defaultdict(list)
-        self.templates: dict[str, bytes] = {
-            "not-identified": b"#!c=0\n> Not identified",
-            "not-allowed": b"#!c=0\n> Not allowed",
-            "exception": b"#!c=0\n> Exception\n",
+        if templates is None:
+            templates = {}
+
+        self.templates: dict[str, Template] = {
+            "not-identified": Template("#!c=0\n> Not identified"),
+            "not-allowed": Template("#!c=0\n> Not allowed"),
+            "exception": Template("#!c=0\n> Exception\n{0}"),
+            "unknown": Template(
+                "#!c=0\n> Not Found\nNo route configured for this path"
+            ),
+            **{k: Template(v) for k, v in templates.items()},
         }
         self.args: Namespace | None = None
 
@@ -106,8 +151,18 @@ class Application:
                 self.app_name,
                 *self.aspects,
             )
+            self._destination.request_handlers = RequestHandlers(self)
+            assert "x" in self._destination.request_handlers
+            self.destination.set_link_established_callback(self.on_link_established)  # pyright: ignore[reportUnknownMemberType]
 
         return self._destination
+
+    def on_link_established(self, link: RNS.Link) -> None:
+        log.debug("Connection established: %s", link)
+        link.set_remote_identified_callback(self.on_remote_identified)  # pyright: ignore[reportUnknownMemberType]
+
+    def on_remote_identified(self, link: RNS.Link, identity: RNS.Identity) -> None:
+        log.debug("Connection %s identified: %s", link, identity)
 
     @property
     def identity(self) -> RNS.Identity | None:
@@ -146,6 +201,7 @@ class Application:
 
     def register_handlers(self) -> None:
         for path, handler in self.handlers.items():
+            log.debug("Registering handler for %s", path)
             self.destination.register_request_handler(  # pyright: ignore[reportUnknownMemberType]
                 path,
                 handler,
@@ -154,6 +210,7 @@ class Application:
 
     def unregister_handlers(self) -> None:
         for path, _ in self.handlers.items():
+            log.debug("Deregistering handler for %s", path)
             _ = self.destination.deregister_request_handler(path)  # pyright: ignore[reportUnknownMemberType]
 
     def run(self, args: Namespace | None = None) -> NoReturn:
@@ -208,13 +265,41 @@ class Application:
         assert hexhash is not None
         self.permissions[permission].append(hexhash)
 
+    def _log_request_state(
+        self,
+        state: str,
+        request_hex: str,
+        remote_identity: RNS.Identity | None,
+        path: str,
+    ) -> None:
+        log.debug(
+            "%s %s... %s | %s",
+            state,
+            request_hex[:9],
+            remote_identity or "<            unknown             >",
+            path,
+        )
+
+    def default_handler(
+        self,
+        path: str,
+        _data: dict[str, Any],  # pyright: ignore[reportExplicitAny]
+        request_id: bytes,
+        remote_identity: RNS.Identity | None,
+        _request_at: float,
+    ) -> bytes | None:
+        request_hex = hex(int.from_bytes(request_id, "big"))[2:]
+        self._log_request_state("REQUEST", request_hex, remote_identity, path)
+        self._log_request_state("UNKNOWN", request_hex, remote_identity, path)
+        return self.template("unknown")()
+
     def request(
         self,
         *paths: str,
         permissions: list[str] | None = None,
         ttl: float | bool = False,
     ):
-        assert ttl == False or ttl >= 0
+        assert ttl == False or ttl >= 0  # noqa: E712
         if permissions is None:
             permissions = []
 
@@ -235,7 +320,7 @@ class Application:
                 )
 
             parameters: list[inspect.Parameter] = list(parameter_iter)
-            cache: dict[tuple, tuple[float, bytes | None]] = {}
+            cache: dict[tuple[Any, ...], tuple[float, bytes | None]] = {}  # pyright: ignore[reportExplicitAny]
 
             def handler(
                 path: str,
@@ -245,15 +330,10 @@ class Application:
                 request_at: float,
             ) -> bytes | None:
                 request_hex = hex(int.from_bytes(request_id, "big"))[2:]
-                log.debug(
-                    "REQUEST %s... %s | %s",
-                    request_hex[:9],
-                    remote_identity or "<            unknown             >",
-                    path,
-                )
+                self._log_request_state("REQUEST", request_hex, remote_identity, path)
                 if permissions:
                     if remote_identity is None:
-                        return self.templates["not-identified"]
+                        return self.template("not-identified")()
 
                     assert remote_identity.hexhash is not None
                     hexhash = remote_identity.hexhash
@@ -262,25 +342,25 @@ class Application:
                             continue
 
                         if hexhash not in self.permissions[permission]:
-                            return self.templates["not-allowed"]
+                            return self.template("not-allowed")()
 
                 try:
                     idx = tuple(parameters)
                     if ttl is not False and idx in cache:
                         _ttl, res = cache[idx]
                         if time.time() < _ttl:
-                            log.debug(
-                                "CACHED  %s... %s | %s",
-                                request_hex[:9],
-                                remote_identity or "<            unknown             >",
+                            self._log_request_state(
+                                "CACHED ",
+                                request_hex,
+                                remote_identity,
                                 path,
                             )
                             return res
 
-                        log.debug(
-                            "STALE   %s... %s | %s",
-                            request_hex[:9],
-                            remote_identity or "<            unknown             >",
+                        self._log_request_state(
+                            "STALE  ",
+                            request_hex,
+                            remote_identity,
                             path,
                         )
                         del cache[idx]
@@ -293,10 +373,10 @@ class Application:
                         request_at,
                     )
                     res = fn(request, **self._parse_params(request, parameters))
-                    log.debug(
-                        "HANDLED %s... %s | %s",
-                        request_hex[:9],
-                        remote_identity or "<            unknown             >",
+                    self._log_request_state(
+                        "HANDLED",
+                        request_hex,
+                        remote_identity,
                         path,
                     )
                     if ttl is not False:
@@ -310,15 +390,25 @@ class Application:
                 except CalledProcessError as e:
                     log.error(traceback.format_exc())
                     return (
-                        self.templates["exception"]
+                        bytes(self.template("exception"))
                         + f"Child processed returned {e.returncode}".encode()
                     )
 
                 except Exception as e:
                     log.error(traceback.format_exc())
-                    return self.templates["exception"] + str(e).encode()
+                    return self.template("exception")(str(e))
 
             for path in paths:
                 self.handlers[path] = handler
 
         return decorator
+
+    def template(self, name: str, template: str | None = None) -> Template:
+        if template is None:
+            return self.templates[name]
+
+        if name in self.templates:
+            raise TemplateExists(name)
+
+        self.templates[name] = Template(template)
+        return self.templates[name]

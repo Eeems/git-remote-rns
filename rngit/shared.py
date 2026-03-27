@@ -42,9 +42,24 @@ def is_valid_hexhash(hexhash: str) -> bool:
     )
 
 
+def is_repo(path: str) -> bool:
+    return subprocess.check_output(
+        ["git", "rev-parse", "--git-dir"],
+        cwd=path,
+        text=True,
+    ).rstrip() in (".", ".git")
+
+
+def _normalize_repo(repo: str, root_dir: str) -> str:
+    if os.path.basename(repo) == ".git":
+        repo = os.path.dirname(repo)
+
+    return os.path.relpath(repo, root_dir)
+
+
 def find_repos(root_dir: str) -> list[str]:
     return [
-        os.path.relpath(x, root_dir)
+        _normalize_repo(x, root_dir)
         for x in subprocess.check_output(
             [
                 "find",
