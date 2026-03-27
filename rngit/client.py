@@ -145,10 +145,15 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
     _ = parser.add_argument("remote", help="Remote name (ignored)")
     _ = parser.add_argument("url", help="Remote URL (<hash>[/path])")
     _ = parser.add_argument(
-        "--version", action="version", version=f"git-remote-rns {__version__}"
+        "--version",
+        action="version",
+        version=f"git-remote-rns {__version__}",
     )
     _ = parser.add_argument(
-        "-i", "--identity", help="Path identity file", dest="identity"
+        "-i",
+        "--identity",
+        help="Path identity file",
+        dest="identity",
     )
     _ = parser.add_argument(
         "-v",
@@ -288,7 +293,7 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
                                 )
 
                             else:
-                                assert not data  # nosec B101
+                                assert not data, f"Unexpected data: {data}"  # nosec B101
                                 log_and_stdout(f"ok {remote_ref}\n")
 
                 while fetch_queue:

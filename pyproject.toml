@@ -32,6 +32,7 @@ dev = ["pytest>=7.0", "prospector[with_everything]", 'basedpyright']
 [project.scripts]
 git-remote-rns = "rngit.__main__:client"
 rngit = "rngit.__main__:server"
+rngit-web = "rngit.__main__:web"
 
 [build-system]
 requires = ["setuptools>=70.1", "nuitka>=4.0.6"]
