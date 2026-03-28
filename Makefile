@@ -88,7 +88,7 @@ test-web: .web requirements ## Run rngit-web for testing
 	python -m rngit \
 	  rngit-web \
 	  --verbose \
-	  --allow-read 1b72330713792d8fb086e881c52c684c \
+	  --allow-debug 1b72330713792d8fb086e881c52c684c \
 	  .web
 
 

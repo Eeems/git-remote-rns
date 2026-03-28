@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import time
+import trace
 import traceback
 from argparse import Namespace
 from collections import defaultdict
@@ -12,6 +13,7 @@ from typing import (
     Any,
     Callable,
     NoReturn,
+    cast,
     override,
 )
 
@@ -135,7 +137,7 @@ class Application:
         self.templates: dict[str, Template] = {
             "not-identified": Template("#!c=0\n> Not identified"),
             "not-allowed": Template("#!c=0\n> Not allowed"),
-            "exception": Template("#!c=0\n> Exception\n{0}"),
+            "exception": Template("#!c=0\n> {title}\n {type}: {message}"),
             "unknown": Template(
                 "#!c=0\n> Not Found\nNo route configured for this path"
             ),
@@ -282,6 +284,38 @@ class Application:
             path,
         )
 
+    def exception(self, request: Request, exception: Exception) -> bytes | None:
+        stacktrace = traceback.format_exc()
+        log.error(stacktrace)
+        tpl = self.template("exception")
+        cls = exception.__class__.__name__
+        if isinstance(exception, CalledProcessError):
+            cmd = cast(list[str], exception.cmd)
+            message = f"{cmd[0]} returned with exit code {exception.returncode}"
+
+        else:
+            message = str(exception)
+
+        title = "Unable to serve"
+        if request.path:
+            title += " " + request.path
+
+        identity = request.identity
+        if (
+            identity is not None
+            and identity.hexhash is not None
+            and identity.hexhash in self.permissions["debug"]
+        ):
+            message += "\n" + "\n".join(
+                [f"  {x}" for x in stacktrace.splitlines(False)]
+            )
+
+        return tpl(
+            title=title,
+            type=cls,
+            message=message,
+        )
+
     def default_handler(
         self,
         path: str,
@@ -358,14 +392,14 @@ class Application:
                             )
                             return self.template("not-allowed")()
 
+                request = Request(
+                    path,
+                    data,
+                    request_hex,
+                    remote_identity,
+                    request_at,
+                )
                 try:
-                    request = Request(
-                        path,
-                        data,
-                        request_hex,
-                        remote_identity,
-                        request_at,
-                    )
                     params = self._parse_params(request, parameters)
                     idx = sha256(
                         json.dumps(params, sort_keys=True).encode()
@@ -404,15 +438,14 @@ class Application:
 
                     return res
 
-                except CalledProcessError as e:
-                    log.error(traceback.format_exc())
-                    return self.template("exception")(
-                        f"Child processed returned {e.returncode}"
-                    )
-
                 except Exception as e:
-                    log.error(traceback.format_exc())
-                    return self.template("exception")(str(e))
+                    self._log_request_state(
+                        "ERRORED",
+                        request_hex,
+                        remote_identity,
+                        path,
+                    )
+                    return self.exception(request, e)
 
             for path in paths:
                 self.handlers[path] = handler

@@ -20,15 +20,19 @@ from .shared import (
 )
 
 
+class InvalidRepoPath(Exception):
+    pass
+
+
 def git(repo: str, *args: str) -> bytes:
     assert app.args is not None
     assert isinstance(app.args.repo, str)  # pyright: ignore[reportAny]
     if ".." in repo:
-        raise InvalidRepoPath(repo)
+        raise InvalidRepoPath("Paths cannot contain ..")
 
     repo_dir = os.path.join(app.args.repo, repo)
     if not is_repo(repo_dir):
-        raise InvalidRepoPath(repo)
+        raise InvalidRepoPath(f"{repo} is not a repository")
 
     return subprocess.check_output(["git", *args], cwd=repo_dir)
 
@@ -52,10 +56,6 @@ def _(_request: Request) -> bytes | None:
     )
 
 
-class InvalidRepoPath(Exception):
-    pass
-
-
 @app.request("/page/repo.mu", ttl=60, permissions=["read"])
 def _(_request: Request, repo: str) -> bytes | None:
     return (
@@ -74,26 +74,26 @@ def main(argv: Sequence[str] | None = None) -> int:
     _ = parser.add_argument(
         "-c",
         "--config",
-        help="Path to Reticulum config directory",
+        help="Path to Reticulum config directory.",
         dest="config",
     )
     _ = parser.add_argument(
         "-i",
         "--identity",
-        help="Path identity file",
+        help="Path identity file.",
         dest="identity",
     )
     _ = parser.add_argument(
         "-v",
         "--verbose",
         action="store_true",
-        help="Enable verbose logging",
+        help="Enable verbose logging.",
         dest="verbose",
     )
     _ = parser.add_argument(
         "-n",
         "--name",
-        help="Name to annouce",
+        help="Name to annouce.",
         dest="name",
         default=f"rngit {__version__}",
     )
@@ -102,7 +102,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--announce-interval",
         type=int,
         default=None,
-        help="Interval in seconds between announces (default: announce once)",
+        help="Interval in seconds between announces (default: announce once).",
         dest="announce_interval",
     )
     _ = parser.add_argument(
@@ -110,15 +110,23 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--allow-read",
         action="append",
         default=[],
-        help="Identities allowed to read the repository",
+        help="Identities allowed to read the repository.",
         dest="allow_read",
+    )
+    _ = parser.add_argument(
+        "-d",
+        "--allow-debug",
+        action="append",
+        default=[],
+        help="Identities allowed to see debug information. Will automatically recieve read permissions as well.",
+        dest="allow_debug",
     )
     _ = parser.add_argument(
         "-A",
         "--allow-all-read",
         action="store_true",
         dest="allow_all_read",
-        help="Allow any connection to read the repository",
+        help="Allow any connection to read the repository.",
     )
     args = parser.parse_args(argv)
 
@@ -158,6 +166,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         if not is_valid_hexhash(allow):
             raise ValueError(f"Invalid read hexhash: {allow}")
 
+    assert isinstance(args.allow_debug, list)  # pyright: ignore[reportAny]# nosec B101
+    assert all(x for x in args.allow_debug if isinstance(x, str))  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]# nosec B101
+    debug_list = set(cast(list[str], args.allow_debug))
+
+    for allow in debug_list:
+        if not is_valid_hexhash(allow):
+            raise ValueError(f"Invalid read hexhash: {allow}")
+
     if allow_all_read and read_list:
         raise ValueError(
             "--allow-read and --allow-all-read cannot be used at the same time"
@@ -173,7 +189,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     log.info("Destination: %s", RNS.prettyhexrep(app.destination.hash))  # pyright: ignore[reportUnknownMemberType]
     log.info("Read list: %s", "(any)" if allow_all_read else read_list)
-    for hexhash in read_list:
+    for hexhash in read_list | debug_list:
         app.permit(hexhash, "read")
+
+    for hexhash in debug_list:
+        app.permit(hexhash, "debug")
 
     app.run(args)
