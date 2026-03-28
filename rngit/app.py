@@ -1,10 +1,12 @@
 import inspect
+import json
 import logging
 import os
 import time
 import traceback
 from argparse import Namespace
 from collections import defaultdict
+from hashlib import sha256
 from subprocess import CalledProcessError
 from typing import (
     Any,
@@ -320,7 +322,7 @@ class Application:
                 )
 
             parameters: list[inspect.Parameter] = list(parameter_iter)
-            cache: dict[tuple[Any, ...], tuple[float, bytes | None]] = {}  # pyright: ignore[reportExplicitAny]
+            cache: dict[str, tuple[float, bytes | None]] = {}
 
             def handler(
                 path: str,
@@ -357,7 +359,17 @@ class Application:
                             return self.template("not-allowed")()
 
                 try:
-                    idx = tuple(parameters)
+                    request = Request(
+                        path,
+                        data,
+                        request_hex,
+                        remote_identity,
+                        request_at,
+                    )
+                    params = self._parse_params(request, parameters)
+                    idx = sha256(
+                        json.dumps(params, sort_keys=True).encode()
+                    ).hexdigest()
                     if ttl is not False and idx in cache:
                         _ttl, res = cache[idx]
                         if time.time() < _ttl:
@@ -377,14 +389,7 @@ class Application:
                         )
                         del cache[idx]
 
-                    request = Request(
-                        path,
-                        data,
-                        request_hex,
-                        remote_identity,
-                        request_at,
-                    )
-                    res = fn(request, **self._parse_params(request, parameters))
+                    res = fn(request, **params)
                     self._log_request_state(
                         "HANDLED",
                         request_hex,
