@@ -333,6 +333,12 @@ class Application:
                 self._log_request_state("REQUEST", request_hex, remote_identity, path)
                 if permissions:
                     if remote_identity is None:
+                        self._log_request_state(
+                            "DENIED ",
+                            request_hex,
+                            remote_identity,
+                            path,
+                        )
                         return self.template("not-identified")()
 
                     assert remote_identity.hexhash is not None
@@ -342,6 +348,12 @@ class Application:
                             continue
 
                         if hexhash not in self.permissions[permission]:
+                            self._log_request_state(
+                                "DENIED ",
+                                request_hex,
+                                remote_identity,
+                                path,
+                            )
                             return self.template("not-allowed")()
 
                 try:
@@ -389,9 +401,8 @@ class Application:
 
                 except CalledProcessError as e:
                     log.error(traceback.format_exc())
-                    return (
-                        bytes(self.template("exception"))
-                        + f"Child processed returned {e.returncode}".encode()
+                    return self.template("exception")(
+                        f"Child processed returned {e.returncode}"
                     )
 
                 except Exception as e:

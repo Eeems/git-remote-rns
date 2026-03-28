@@ -1,6 +1,7 @@
 import argparse
 import logging
 import os
+import subprocess
 from collections.abc import Sequence
 from typing import cast
 
@@ -17,6 +18,20 @@ from .shared import (
     is_repo,
     is_valid_hexhash,
 )
+
+
+def git(repo: str, *args: str) -> bytes:
+    assert app.args is not None
+    assert isinstance(app.args.repo, str)  # pyright: ignore[reportAny]
+    if ".." in repo:
+        raise InvalidRepoPath(repo)
+
+    repo_dir = os.path.join(app.args.repo, repo)
+    if not is_repo(repo_dir):
+        raise InvalidRepoPath(repo)
+
+    return subprocess.check_output(["git", *args], cwd=repo_dir)
+
 
 log: logging.Logger = logging.getLogger(__name__)
 app = Application(
@@ -43,16 +58,9 @@ class InvalidRepoPath(Exception):
 
 @app.request("/page/repo.mu", ttl=60, permissions=["read"])
 def _(_request: Request, repo: str) -> bytes | None:
-    assert app.args is not None
-    assert isinstance(app.args.repo, str)  # pyright: ignore[reportAny]
-    if ".." in repo:
-        raise InvalidRepoPath(repo)
-
-    repo_dir = os.path.join(app.args.repo, repo)
-    if not is_repo(repo_dir):
-        raise InvalidRepoPath(repo)
-
-    return b"Hello world!"
+    return (
+        git(repo, "refs", "list") + b"\n" + git(repo, "ls-tree", "--full-tree", "HEAD")
+    )
 
 
 def main(argv: Sequence[str] | None = None) -> int:
