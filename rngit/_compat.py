@@ -1,5 +1,3 @@
-from typing import Any
-
 # Added in python 3.12
 try:
     from typing import (
@@ -7,10 +5,6 @@ try:
     )
 
 except ImportError:
-    from typing import Callable
-
-    def override(fn: Callable[..., Any]):  # pyright: ignore[reportExplicitAny]
-        return fn
-
+    from overrides import override
 
 __all__ = ["override"]

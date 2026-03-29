@@ -56,7 +56,7 @@ $(VENV_BIN_ACTIVATE):
 	python -m pip install --upgrade pip; \
 	python -m pip install --upgrade build wheel
 
-requirements: $(VENV_BIN_ACTIVATE) ## Install development requirements
+requirements: $(VENV_BIN_ACTIVATE) pyproject.toml ## Install development requirements
 	@. ${VENV_BIN_ACTIVATE}; \
 	python -m pip install -e ".[dev]" -q
 
