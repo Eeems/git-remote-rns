@@ -1,12 +1,16 @@
+import ctypes
 import inspect
 import json
 import logging
 import os
+import threading
 import time
 import traceback
+import typing
 from argparse import Namespace
 from collections import defaultdict
 from hashlib import sha256
+from io import BufferedReader
 from subprocess import CalledProcessError
 from typing import (
     Any,
@@ -17,6 +21,7 @@ from typing import (
 
 import RNS
 
+from . import micron
 from ._compat import override
 from .shared import is_valid_hexhash
 
@@ -57,7 +62,7 @@ class BadRequestMethod(Exception):
     pass
 
 
-class InvalidParameterType(Exception):
+class InvalidParameterType(ExceptionGroup):
     pass
 
 
@@ -69,7 +74,7 @@ class TemplateExists(Exception):
     pass
 
 
-RequestHandlerCallable = Callable[
+Handler = Callable[
     [
         str,
         dict[str, Any],  # pyright: ignore[reportExplicitAny]
@@ -79,27 +84,32 @@ RequestHandlerCallable = Callable[
     ],
     bytes | None,
 ]
+HandlerRegistration = tuple[str, Handler, int, list[str], bool]
+FileResponse = tuple[BufferedReader, dict[str, bytes]]
+RequestHandler = Callable[..., FileResponse | bytes | None]
+PageHandler = Callable[..., bytes | None]
+FileHandler = Callable[..., FileResponse | None]
 
 
 # Hack to allow returning "Not found" errors for pages without handlers"
 class RequestHandlers(defaultdict):  # pyright: ignore[reportMissingTypeArgument]
     def __init__(self, app: "Application"):
         super().__init__()  # pyright: ignore[reportUnknownMemberType]
-        self._app: Application = app
+        self._default: HandlerRegistration = (
+            "?",
+            app.default_handler,
+            RNS.Destination.ALLOW_ALL,
+            [],
+            True,
+        )
 
     @override
     def __contains__(self, _, /) -> bool:
         return True
 
     @override
-    def __missing__(self, _, /):  # pyright: ignore[reportUnknownParameterType]
-        return [  # pyright: ignore[reportUnknownVariableType]
-            "?",
-            self._app.default_handler,
-            RNS.Destination.ALLOW_ALL,
-            [],
-            True,
-        ]
+    def __missing__(self, _, /) -> HandlerRegistration:
+        return self._default
 
 
 class Template:
@@ -128,7 +138,7 @@ class Application:
         self.app_name: str = app_name
         self.aspects: list[str] = aspects
         self._identity: RNS.Identity | None = None
-        self.handlers: dict[str, RequestHandlerCallable] = {}
+        self.handlers: dict[str, tuple[Handler, bool]] = {}
         self.permissions: defaultdict[str, list[str]] = defaultdict(list)
         if templates is None:
             templates = {}
@@ -140,6 +150,7 @@ class Application:
             "unknown": Template(
                 "#!c=0\n> Not Found\nNo route configured for this path"
             ),
+            "timeout": Template("#!c=0\n> Timeout\nRequest timed out"),
             **{k: Template(v) for k, v in templates.items()},
         }
         self.args: Namespace | None = None
@@ -203,12 +214,13 @@ class Application:
         _ = self.destination.announce(self.announce_name)  # pyright: ignore[reportUnknownMemberType]
 
     def register_handlers(self) -> None:
-        for path, handler in self.handlers.items():
+        for path, (handler, compress) in self.handlers.items():
             log.debug("Registering handler for %s", path)
             self.destination.register_request_handler(  # pyright: ignore[reportUnknownMemberType]
                 path,
                 handler,
                 RNS.Destination.ALLOW_ALL,
+                auto_compress=compress,
             )
 
     def unregister_handlers(self) -> None:
@@ -240,17 +252,28 @@ class Application:
                     raise MissingParameter(f"Missing {name} parameter")
 
                 params[name] = parameter.default  # pyright: ignore[reportAny]
+                continue
 
-            try:
-                value = request.param(name)  # pyright: ignore[reportAny]
-                parsed = param_type(value)  # pyright: ignore[reportAny]
-                params[name] = parsed
+            exceptions: list[Exception] = []
+            value = request.param(name)  # pyright: ignore[reportAny]
+            for sub_type in typing.get_args(param_type) or (param_type,):
+                try:
+                    parsed = sub_type(value)  # pyright: ignore[reportAny]
+                    if sub_type is str:
+                        assert isinstance(parsed, str)
+                        parsed = micron.paramunescape(parsed)
 
-            except Exception as e:
+                    params[name] = parsed
+                    break
+
+                except Exception as e:
+                    exceptions.append(e)
+
+            else:
                 raise InvalidParameterType(
-                    f"Unable to convert parameter {name} into {param_type.__name__}:"
-                    + str(e)
-                ) from e
+                    f"Unable to convert parameter {name} into {param_type.__name__}",
+                    exceptions,
+                )
 
         return params
 
@@ -284,16 +307,30 @@ class Application:
 
     def exception(self, request: Request, exception: Exception) -> bytes | None:
         stacktrace = traceback.format_exc()
-        log.error(stacktrace)
         tpl = self.template("exception")
         cls = exception.__class__.__name__
         if isinstance(exception, CalledProcessError):
+            if exception.stdout:  # pyright: ignore[reportAny]
+                stdout = exception.stdout  # pyright: ignore[reportAny]
+                if isinstance(stdout, bytes):
+                    stdout = stdout.decode()
+
+                stacktrace += f"\nstdout: {stdout}"
+
+            if exception.stderr:  # pyright: ignore[reportAny]
+                stderr = exception.stderr  # pyright: ignore[reportAny]
+                if isinstance(stderr, bytes):
+                    stderr = stderr.decode()
+
+                stacktrace += f"\nstderr: {stderr}"
+
             cmd = cast(list[str], exception.cmd)
             message = f"{cmd[0]} returned with exit code {exception.returncode}"
 
         else:
             message = str(exception)
 
+        log.error(stacktrace)
         title = "Unable to serve"
         if request.path:
             title += " " + request.path
@@ -327,19 +364,50 @@ class Application:
         self._log_request_state("UNKNOWN", request_hex, remote_identity, path)
         return self.template("unknown")()
 
+    def page(
+        self,
+        *paths: str,
+        permissions: list[str] | None = None,
+        ttl: float | bool = False,
+        timeout: float | None = 10.0,
+        compress: bool = True,
+    ) -> Callable[[PageHandler], None]:
+        return self.request(
+            *[f"/page/{x}.mu" for x in paths],
+            permissions=permissions,
+            ttl=ttl,
+            timeout=timeout,
+            compress=compress,
+        )
+
+    def file(
+        self,
+        *paths: str,
+        permissions: list[str] | None = None,
+        ttl: float | bool = False,
+        timeout: float | None = 10.0,
+    ) -> Callable[[FileHandler], None]:
+        return self.request(
+            *[f"/file/{x}" for x in paths],
+            permissions=permissions,
+            ttl=ttl,
+            timeout=timeout,
+            compress=False,
+        )
+
     def request(  # noqa: MC0001
         self,
         *paths: str,
         permissions: list[str] | None = None,
         ttl: float | bool = False,
-    ):
+        timeout: float | None = 10.0,
+        compress: bool = True,
+    ) -> Callable[[RequestHandler], None]:
         assert ttl is False or ttl >= 0  # noqa: E712
         if permissions is None:
             permissions = []
 
-        def decorator(
-            fn: Callable[..., bytes | None],
-        ):
+        def decorator(fn: RequestHandler) -> None:
             signature = inspect.signature(fn)
             if len(signature.parameters) == 0:
                 raise BadRequestMethod(
@@ -402,6 +470,7 @@ class Application:
                     idx = sha256(
                         json.dumps(params, sort_keys=True).encode()
                     ).hexdigest()
+                    res: Exception | bytes | FileResponse | None = None
                     if ttl is not False and idx in cache:
                         _ttl, res = cache[idx]
                         if time.time() < _ttl:
@@ -421,14 +490,55 @@ class Application:
                         )
                         del cache[idx]
 
-                    res = fn(request, **params)
+                    def target(
+                        fn: RequestHandler,
+                        request: Request,
+                        **kwargs,  # pyright: ignore[reportUnknownParameterType, reportMissingParameterType]
+                    ):
+                        nonlocal res
+                        try:
+                            res = fn(request, **kwargs)
+
+                        except Exception as e:
+                            res = e
+
+                    thread = threading.Thread(
+                        target=target,  # pyright: ignore[reportUnknownArgumentType]
+                        args=(
+                            fn,
+                            request,
+                        ),
+                        kwargs=params,
+                    )
+                    thread.start()
+                    thread.join(timeout)
+                    if timeout is not None and thread.is_alive():
+                        self._log_request_state(
+                            "TIMEOUT",
+                            request_hex,
+                            remote_identity,
+                            path,
+                        )
+                        returncode = ctypes.pythonapi.PyThreadState_SetAsyncExc(  # pyright: ignore[reportAny]
+                            thread.native_id, ctypes.py_object(SystemExit)
+                        )
+                        if returncode > 1:
+                            ctypes.pythonapi.PyThreadState_SetAsyncExc(
+                                thread.native_id, 0
+                            )
+
+                        return self.template("timeout")()
+
+                    if isinstance(res, Exception):
+                        raise res
+
                     self._log_request_state(
                         "HANDLED",
                         request_hex,
                         remote_identity,
                         path,
                     )
-                    if ttl is not False:
+                    if isinstance(res, bytes | None) and ttl is not False:  # pyright: ignore[reportUnnecessaryIsInstance]
                         cache[idx] = (
                             time.time() + ttl if ttl else 0,
                             res,
@@ -446,7 +556,7 @@ class Application:
                     return self.exception(request, e)
 
             for path in paths:
-                self.handlers[path] = handler
+                self.handlers[path] = (handler, compress)
 
         return decorator
 

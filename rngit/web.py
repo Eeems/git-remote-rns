@@ -1,14 +1,24 @@
 # pylint: disable=R0801
 import argparse
+import io
 import logging
+import math
 import os
 import subprocess
-from collections.abc import Sequence
+from collections.abc import (
+    Generator,
+    Sequence,
+)
+from datetime import datetime
 from typing import cast
 
 import RNS
+from humanize import naturalday
 
-from . import __version__
+from . import (
+    __version__,
+    micron,
+)
 from .app import (
     Application,
     Request,
@@ -25,45 +35,526 @@ class InvalidRepoPath(Exception):
     pass
 
 
-def git(repo: str, *args: str) -> bytes:
+def repo_dir(repo: str) -> str:
     assert app.args is not None
     assert isinstance(app.args.repo, str)  # pyright: ignore[reportAny]
     if ".." in repo:
         raise InvalidRepoPath("Paths cannot contain ..")
 
-    repo_dir = os.path.join(app.args.repo, repo)
-    if not is_repo(repo_dir):
+    path = os.path.join(app.args.repo, repo)
+    if not is_repo(path):
         raise InvalidRepoPath(f"{repo} is not a repository")
 
-    return subprocess.check_output(["git", *args], cwd=repo_dir)
+    return path
+
+
+def git(repo: str, *args: str, timeout: float | None = 10.0) -> bytes:
+    cmd = ["git", *args]
+    proc = subprocess.run(cmd, cwd=repo_dir(repo), capture_output=True, timeout=timeout)
+    if proc.returncode:
+        raise subprocess.CalledProcessError(
+            proc.returncode,
+            cmd,
+            proc.stdout,
+            proc.stderr,
+        )
+
+    return proc.stdout
+
+
+def refs(repo: str) -> list[tuple[str, str]]:
+    try:
+        return [
+            cast(tuple[str, str], tuple(x.split(" ", 1)))
+            for x in git(repo, "show-ref", "--head").decode().splitlines(False)
+        ]
+
+    except subprocess.CalledProcessError as e:
+        if e.stdout or e.stderr:  # pyright: ignore[reportAny]
+            raise
+
+        return []
+
+
+def branches(repo: str) -> list[str]:
+    try:
+        return (
+            git(repo, "branch", "--format=%(refname:short)").decode().splitlines(False)
+        )
+
+    except subprocess.CalledProcessError as e:
+        if e.stdout or e.stderr:  # pyright: ignore[reportAny]
+            raise
+
+        return []
+
+
+def tags(repo: str) -> list[str]:
+    try:
+        return git(repo, "tag", "--format=%(refname:short)").decode().splitlines(False)
+
+    except subprocess.CalledProcessError as e:
+        if e.stdout or e.stderr:  # pyright: ignore[reportAny]
+            raise
+
+        return []
+
+
+def tree(repo: str, ref: str) -> Generator[tuple[str, str, str, str], None, None]:
+    try:
+        for line in git(repo, "ls-tree", ref).decode().splitlines(False):
+            parts = line.split(maxsplit=3)
+            if len(parts) != 4:
+                raise RuntimeError("Data returned by git doesn't match expcted format")
+
+            perms, type, sha, name = parts
+            yield perms, type, sha, name.lstrip()
+
+    except subprocess.CalledProcessError as e:
+        if e.stdout or e.stderr:  # pyright: ignore[reportAny]
+            raise
+
+
+def readme(repo: str, ref: str = "HEAD") -> str:
+    for _, type, sha, name in tree(repo, ref):
+        if type != "blob":
+            continue
+
+        lowername = name.lower()
+        if lowername != "readme" and os.path.splitext(lowername)[0] != "readme":
+            continue
+
+        return git(repo, "cat-file", "blob", sha).decode()
+
+    return ""
+
+
+def commits(
+    repo: str, ref: str | None = None, count: int = 100, skip: int = 0
+) -> Generator[tuple[tuple[str, str], tuple[str, str], datetime, list[str], str]]:
+    for line in (
+        git(
+            repo,
+            "log",
+            "--pretty=oneline",
+            "--format=format:%h\t%H\t%aN\t%aE\t%ai\t%(decorate:tag=tags/,prefix=,suffix=,separator=|)\t%s",
+            f"--max-count={count}",
+            f"--skip={skip}",
+            ref or "HEAD",
+        )
+        .decode()
+        .splitlines(False)
+    ):
+        parts = line.split("\t", maxsplit=6)
+        if len(parts) != 7:
+            raise RuntimeError("Data returned doesn't match expected format")
+
+        short_sha, sha, author_name, author_email, date, refs, subject = parts
+
+        yield (
+            (short_sha, sha),
+            (author_name, author_email),
+            datetime.fromisoformat(date),
+            refs.split("|"),
+            subject,
+        )
 
 
 log: logging.Logger = logging.getLogger(__name__)
 app = Application(
     "nomadnetwork",
     ["node"],
-    templates={
-        "repo-link": "`_`[{0}`:/page/repo.mu`repo={0}]`_",
-    },
+    templates={},
 )
 
 
-@app.request("/page/index.mu", ttl=10, permissions=["read"])
+def header(
+    name: str,
+    breadcrumbs: list[tuple[str, str] | tuple[str, str, dict[str, str]]] | None = None,
+) -> bytes:
+    if breadcrumbs is None:
+        breadcrumbs = []
+
+    breadcrumb_links = b" > ".join([micron.page_link(*args) for args in breadcrumbs])  # pyright: ignore[reportArgumentType]
+    return (
+        b"> "
+        + micron.page_link("index", "Home")
+        + (b" > " if breadcrumbs else b"")
+        + breadcrumb_links
+        + b" > "
+        + name.encode()
+        + b"\n> \n"
+    )
+
+
+@app.page("index", ttl=10, permissions=["read"])
 def _(_request: Request) -> bytes | None:
     assert app.args is not None
     assert isinstance(app.args.repo, str)  # pyright: ignore[reportAny]
     return b"> Repositories\n" + b"\n".join(
-        [b">> " + app.template("repo-link")(x) for x in find_repos(app.args.repo)]
+        [
+            b">> " + micron.page_link("repo", x, {"repo": x})
+            for x in find_repos(app.args.repo)
+        ]
     )
 
 
-@app.request("/page/repo.mu", ttl=60, permissions=["read"])
+@app.page("repo", ttl=60, permissions=["read"])
 def _(  # pylint: disable=E0102 # noqa: F811
-    _request: Request, repo: str
+    _request: Request,
+    repo: str,
 ) -> bytes | None:
     return (
-        git(repo, "refs", "list") + b"\n" + git(repo, "ls-tree", "--full-tree", "HEAD")
+        header(repo)
+        + b">> "
+        + micron.page_link("tree", "tree", {"repo": repo})
+        + b" | "
+        + micron.page_link("commits", "commits", {"repo": repo})
+        + b" | "
+        + micron.page_link("branches", "branches", {"repo": repo})
+        + b" | "
+        + micron.page_link("tags", "tags", {"repo": repo})
+        + b"\n>> \n"
+        + micron.escape(readme(repo))
     )
+
+
+@app.page("branches", ttl=60, permissions=["read"])
+def _(  # pylint: disable=E0102 # noqa: F811
+    _request: Request,
+    repo: str,
+) -> bytes | None:
+    return (
+        header("branches", [("repo", repo, {"repo": repo})])
+        + b">> Branches\n"
+        + b"\n".join(
+            [
+                b">>> "
+                + micron.page_link(
+                    "branch",
+                    branch,
+                    {"repo": repo, "branch": branch},
+                )
+                for branch in branches(repo)
+            ]
+        )
+        + b"\n>>> \n"
+    )
+
+
+@app.page("branch", ttl=60, permissions=["read"])
+def _(  # pylint: disable=E0102 # noqa: F811
+    _request: Request,
+    repo: str,
+    branch: str,
+) -> bytes | None:
+    return (
+        header(
+            f"branch: {branch}",
+            [
+                ("repo", repo, {"repo": repo}),
+                ("branches", repo, {"repo": repo}),
+            ],
+        )
+        + b">> "
+        + micron.page_link("tree", "tree", {"repo": repo, "ref": branch})
+        + b" | "
+        + micron.page_link("commits", "commits", {"repo": repo, "branch": branch})
+        + b"\n>> \n"
+        + micron.escape(readme(repo, branch))
+    )
+
+
+@app.page("tags", ttl=60, permissions=["read"])
+def _(  # pylint: disable=E0102 # noqa: F811
+    _request: Request,
+    repo: str,
+) -> bytes | None:
+    return (
+        header("tags", [("repo", repo, {"repo": repo})])
+        + b">> tags\n"
+        + b"\n".join(
+            [
+                b">>> " + micron.page_link("tag", tag, {"repo": repo, "tag": tag})
+                for tag in tags(repo)
+            ]
+        )
+        + b"\n>>> \n"
+    )
+
+
+@app.page("tag", ttl=60, permissions=["read"])
+def _(  # pylint: disable=E0102 # noqa: F811
+    _request: Request,
+    repo: str,
+    tag: str,
+) -> bytes | None:
+    return (
+        header(
+            f"tag: {tag}",
+            [
+                ("repo", repo, {"repo": repo}),
+                ("tags", repo, {"repo": repo}),
+            ],
+        )
+        + b">> "
+        + micron.page_link("tree", "tree", {"repo": repo, "ref": tag})
+        + b" | "
+        + micron.page_link("commits", "commits", {"repo": repo, "tag": tag})
+        + b"\n>> \n"
+        + micron.escape(readme(repo, tag))
+    )
+
+
+@app.page("tree", ttl=60, permissions=["read"])
+def _(  # pylint: disable=E0102 # noqa: F811
+    _request: Request,
+    repo: str,
+    ref: str | None = None,
+    path: str | None = None,
+) -> bytes | None:
+    links: list[bytes] = []
+    effective_ref = ref or "HEAD"
+    for perms, type, _, name in tree(repo, f"{effective_ref}:{path or ''}"):
+        params = {"repo": repo, "path": os.path.join(path or "", name)}
+        if ref is not None:
+            params["ref"] = ref
+
+        match type:
+            case "blob":
+                page = "blob"
+
+            case "tree":
+                page = "tree"
+
+            case _:
+                raise RuntimeError(f"Unknown tree type: {type}")
+
+        links.append(f"{perms} ".encode() + micron.page_link(page, name, params))
+
+    breadcrumbs: list[tuple[str, str] | tuple[str, str, dict[str, str]]] = [
+        ("repo", repo, {"repo": repo}),
+    ]
+    if path is not None:
+        breadcrumbs.append(
+            ("tree", "tree", {"repo": repo}),
+        )
+        name = os.path.basename(path)
+        parent = os.path.dirname(path)
+        while parent:
+            params = {"repo": repo, "path": parent}
+            if ref is not None:
+                params["ref"] = ref
+
+            breadcrumbs.insert(2, ("tree", os.path.basename(parent), params))
+            parent = os.path.dirname(parent)
+
+    else:
+        name = "tree"
+
+    return (
+        header(name, breadcrumbs)
+        + f">> tree: {effective_ref}\n".encode()
+        + b"\n".join(links)
+        + b"\n>>> \n"
+    )
+
+
+@app.page("commits", ttl=60, permissions=["read"])
+def _(  # pylint: disable=E0102 # noqa: F811
+    _request: Request,
+    repo: str,
+    branch: str | None = None,
+    tag: str | None = None,
+    page: int = 0,
+) -> bytes | None:
+    if page < 0:
+        raise ValueError("Page cannot be negative")
+
+    if branch is not None and tag is not None:
+        raise ValueError("branch and tag cannot be set at the same time")
+
+    breadcrumbs: list[tuple[str, str] | tuple[str, str, dict[str, str]]] = [
+        ("repo", repo, {"repo": repo})
+    ]
+    name = "commits"
+    if branch is not None:
+        name += ": branch" + branch
+        breadcrumbs.append(("branch", branch, {"repo": repo, "branch": branch}))
+    elif tag is not None:
+        name += ": tag" + tag
+        breadcrumbs.append(("tag", tag, {"repo": repo, "tag": tag}))
+
+    params = {"repo": repo}
+    if branch:
+        params["branch"] = branch
+
+    elif tag:
+        params["tag"] = tag
+
+    content: list[bytes] = []
+    ref = branch or tag or "HEAD"
+    for (short_sha, sha), (author, email), date, refs, subject in commits(
+        repo,
+        ref,
+        count=100,
+        skip=page * 100,
+    ):
+        content.append(
+            micron.page_link("commit", short_sha, {"sha": sha, **params})
+            + b" | "
+            + author.encode()
+            + b" | "
+            + naturalday(date).encode()
+            + b" | "
+            + subject.encode()
+        )
+
+    total = int(git(repo, "rev-list", "--count", ref).decode())
+    footer: list[bytes] = []
+    if page:
+        footer.append(
+            micron.page_link(
+                "commits",
+                "|<",
+                {"page": "0", **params},
+            )
+        )
+        footer.append(
+            micron.page_link(
+                "commits",
+                "<",
+                {"page": str(page - 1), **params},
+            )
+        )
+
+    last_page = math.ceil(total / 100)
+    footer.append(f"page {page + 1} of {last_page}".encode())
+    if (page + 1) * 100 < total:
+        footer.append(
+            micron.page_link(
+                "commits",
+                ">",
+                {"page": str(page + 1), **params},
+            )
+        )
+        footer.append(
+            micron.page_link(
+                "commits",
+                ">|",
+                {"page": str(last_page), **params},
+            )
+        )
+
+    return header(name, breadcrumbs) + b"\n".join(content) + b"\n`r" + b" ".join(footer)
+
+
+@app.page("blob", ttl=60, permissions=["read"])
+def _(  # pylint: disable=E0102 # noqa: F811
+    _request: Request,
+    repo: str,
+    path: str,
+    ref: str | None = None,
+) -> bytes | None:
+    parent = os.path.dirname(path)
+    breadcrumbs: list[tuple[str, str] | tuple[str, str, dict[str, str]]] = [
+        ("repo", repo, {"repo": repo}),
+        ("tree", "tree", {"repo": repo}),
+    ]
+    while parent:
+        params = {"repo": repo, "path": parent}
+        if ref is not None:
+            params["ref"] = ref
+
+        breadcrumbs.insert(2, ("tree", os.path.basename(parent), params))
+        parent = os.path.dirname(parent)
+
+    params = {"repo": repo, "path": path}
+    if ref is not None:
+        params["ref"] = ref
+
+    try:
+        content = micron.escape(
+            git(repo, "cat-file", "blob", f"{ref or 'HEAD'}:{path}")
+        )
+
+    except UnicodeDecodeError:
+        content = b"(binary content)"
+
+    return header(f"blob: {os.path.basename(path)}", breadcrumbs) + content
+
+
+@app.page("commit", ttl=60, permissions=["read"])
+def _(  # pylint: disable=E0102 # noqa: F811
+    _request: Request,
+    repo: str,
+    sha: str,
+    branch: str | None = None,
+    tag: str | None = None,
+) -> bytes | None:
+    params = {"repo": repo}
+    if branch:
+        params["branch"] = branch
+
+    elif tag:
+        params["tag"] = tag
+
+    breadcrumbs: list[tuple[str, str] | tuple[str, str, dict[str, str]]] = [
+        ("repo", repo, {"repo": repo}),
+        ("commits", "commits", params),
+    ]
+    content: list[bytes] = []
+    for line in git(repo, "diff", "--name-status", sha).decode().splitlines(False):
+        parts = line.split(maxsplit=1)
+        if len(parts) != 2:
+            raise RuntimeError("Data returned by git doesn't match expcted format")
+
+        _, path = parts
+        content.append(
+            micron.page_link("diff", line, {"path": path, "sha": sha, **params})
+        )
+
+    return (
+        header(f"commit: {sha}", breadcrumbs)
+        + micron.escape(git(repo, "log", "--max-count=1", sha, "--pretty=fuller"))
+        + b"\n"
+        + b"\n".join(content)
+    )
+
+
+@app.page("diff", ttl=60, permissions=["read"])
+def _(  # pylint: disable=E0102 # noqa: F811
+    _request: Request,
+    repo: str,
+    sha: str,
+    path: str,
+    branch: str | None = None,
+    tag: str | None = None,
+) -> bytes | None:
+    params = {"repo": repo}
+    if branch:
+        params["branch"] = branch
+
+    elif tag:
+        params["tag"] = tag
+
+    breadcrumbs: list[tuple[str, str] | tuple[str, str, dict[str, str]]] = [
+        ("repo", repo, {"repo": repo}),
+        ("commits", "commits", params),
+        ("commit", f"commit: {sha}", {"sha": sha, **params}),
+    ]
+    content: list[bytes] = []
+    for line in git(repo, "diff", "-w", sha, "--", path).decode().splitlines(False):
+        color = b""
+        if line.startswith("+"):
+            color = b"`F0f2"
+
+        elif line.startswith("-"):
+            color = b"`Ff00"
+
+        content.append(color + micron.escape(line) + b"`f")
+
+    return header(f"diff: {path}", breadcrumbs) + b"\n".join(content)
 
 
 def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001

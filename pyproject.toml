@@ -48,6 +48,9 @@ dev = [
     "ruff",
     "vulture",
 ]
+web = [
+    "humanize>=4.15.0",
+]
 
 [project.scripts]
 git-remote-rns = "rngit.__main__:client"
@@ -102,6 +105,8 @@ disable = [
 ignore_names = ["__*", "_*", "_"]
 ignore_decorators = [
     "@app.request",
+    "@app.page",
+    "@app.file",
     '@pytest.fixture',
 ]
 exclude = [

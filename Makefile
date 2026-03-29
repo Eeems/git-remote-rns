@@ -60,6 +60,10 @@ requirements: $(VENV_BIN_ACTIVATE) pyproject.toml ## Install development require
 	@. ${VENV_BIN_ACTIVATE}; \
 	python -m pip install -e ".[dev]" -q
 
+requirements-web: $(VENV_BIN_ACTIVATE) pyproject.toml ## Install web requirements
+	@. ${VENV_BIN_ACTIVATE}; \
+	python -m pip install -e ".[web]" -q
+
 test: requirements ## Run tests
 	@. ${VENV_BIN_ACTIVATE}; \
 	python -m pytest \
@@ -69,7 +73,7 @@ test: requirements ## Run tests
 .web:
 	mkdir -p .web
 
-test-web: .web requirements ## Run rngit-web for testing
+test-web: .web requirements-web ## Run rngit-web for testing
 	@cd .web;\
 	if [ ! -d git-remote-rns ];then \
 	  git clone https://github.com/Eeems/git-remote-rns; \
