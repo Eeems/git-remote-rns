@@ -1,19 +1,21 @@
 import sys
 
-from .client import main as _client
-from .server import main as _server
-from .web import main as _web
-
 
 def client():
+    from .client import main as _client
+
     sys.exit(_client())
 
 
 def server():
+    from .server import main as _server
+
     sys.exit(_server())
 
 
 def web():
+    from .web import main as _web
+
     sys.exit(_web())
 
 
