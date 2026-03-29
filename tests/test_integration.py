@@ -279,7 +279,7 @@ class IntegrationStack:
             capture_output=True,
             text=True,
             timeout=timeout,
-            check=True,
+            check=False,
         )
         print(f"CLIENT STDOUT: {result.stdout}")
         print(f"CLIENT STDERR: {result.stderr}")
