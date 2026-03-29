@@ -3,7 +3,6 @@ import json
 import logging
 import os
 import time
-import trace
 import traceback
 from argparse import Namespace
 from collections import defaultdict
@@ -89,11 +88,11 @@ class RequestHandlers(defaultdict):  # pyright: ignore[reportMissingTypeArgument
         self._app: Application = app
 
     @override
-    def __contains__(self, _) -> bool:
+    def __contains__(self, _, /) -> bool:
         return True
 
     @override
-    def __missing__(self, pathhash: bytes, /):  # pyright: ignore[reportUnknownParameterType]
+    def __missing__(self, _, /):  # pyright: ignore[reportUnknownParameterType]
         return [  # pyright: ignore[reportUnknownVariableType]
             "?",
             self._app.default_handler,
@@ -181,11 +180,11 @@ class Application:
             self._identity = identity_or_path
             return
 
-        assert RNS.Reticulum.configdir is not None  # pyright: ignore[reportUnknownMemberType] # nosec B101
+        assert RNS.Reticulum.configdir is not None  # pyright: ignore[reportUnknownMemberType]
         if identity_or_path is None:
             identity_or_path = os.path.join(RNS.Reticulum.configdir, "identity")  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
 
-        assert identity_or_path is not None  # nosec B101
+        assert identity_or_path is not None
         log.info("Identity: %s", identity_or_path)
         identity = None
         if os.path.exists(identity_or_path):
@@ -195,8 +194,8 @@ class Application:
             identity = RNS.Identity(True)
             _ = identity.to_file(identity_or_path)  # pyright: ignore[reportUnknownMemberType]
 
-        assert identity is not None  # nosec B101
-        assert identity.hexhash is not None  # nosec B101
+        assert identity is not None
+        assert identity.hexhash is not None
         self._identity = identity
 
     def announce(self) -> None:
@@ -240,8 +239,7 @@ class Application:
                 if parameter.default == parameter.empty:  # pyright: ignore[reportAny]
                     raise MissingParameter(f"Missing {name} parameter")
 
-                else:
-                    params[name] = parameter.default  # pyright: ignore[reportAny]
+                params[name] = parameter.default  # pyright: ignore[reportAny]
 
             try:
                 value = request.param(name)  # pyright: ignore[reportAny]
@@ -252,7 +250,7 @@ class Application:
                 raise InvalidParameterType(
                     f"Unable to convert parameter {name} into {param_type.__name__}:"
                     + str(e)
-                )
+                ) from e
 
         return params
 
@@ -329,13 +327,13 @@ class Application:
         self._log_request_state("UNKNOWN", request_hex, remote_identity, path)
         return self.template("unknown")()
 
-    def request(
+    def request(  # noqa: MC0001
         self,
         *paths: str,
         permissions: list[str] | None = None,
         ttl: float | bool = False,
     ):
-        assert ttl == False or ttl >= 0  # noqa: E712
+        assert ttl is False or ttl >= 0  # noqa: E712
         if permissions is None:
             permissions = []
 
@@ -343,7 +341,7 @@ class Application:
             fn: Callable[..., bytes | None],
         ):
             signature = inspect.signature(fn)
-            if not len(signature.parameters):
+            if len(signature.parameters) == 0:
                 raise BadRequestMethod(
                     "request methods must accept a Request as the first parameter: None"
                 )

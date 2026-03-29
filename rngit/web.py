@@ -1,3 +1,4 @@
+# pylint: disable=R0801
 import argparse
 import logging
 import os
@@ -57,13 +58,15 @@ def _(_request: Request) -> bytes | None:
 
 
 @app.request("/page/repo.mu", ttl=60, permissions=["read"])
-def _(_request: Request, repo: str) -> bytes | None:
+def _(  # pylint: disable=E0102 # noqa: F811
+    _request: Request, repo: str
+) -> bytes | None:
     return (
         git(repo, "refs", "list") + b"\n" + git(repo, "ls-tree", "--full-tree", "HEAD")
     )
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
     parser = argparse.ArgumentParser(prog="rngit-web")
     _ = parser.add_argument("repo", help="Path to git repository to serve")
     _ = parser.add_argument(
@@ -130,7 +133,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    assert isinstance(args.repo, str)  # pyright: ignore[reportAny] # nosec B101
+    assert isinstance(args.repo, str)  # pyright: ignore[reportAny]
     repo_path = os.path.realpath(args.repo)
     if not os.path.exists(repo_path):
         raise FileNotFoundError(repo_path)
@@ -138,36 +141,36 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not os.path.isdir(repo_path):
         raise ValueError(f"Not a directory: {repo_path}")
 
-    assert isinstance(args.config, str | None)  # pyright: ignore[reportAny] # nosec B101
+    assert isinstance(args.config, str | None)  # pyright: ignore[reportAny]
     config_path = args.config
     if config_path is None:
         config_path = os.environ.get("RNS_CONFIG_PATH", None)
 
-    assert isinstance(args.verbose, bool)  # pyright: ignore[reportAny] # nosec B101
+    assert isinstance(args.verbose, bool)  # pyright: ignore[reportAny]
     verbose = args.verbose
 
-    assert isinstance(args.identity, str | None)  # pyright: ignore[reportAny] # nosec B101
+    assert isinstance(args.identity, str | None)  # pyright: ignore[reportAny]
     identity_path = args.identity
 
-    assert isinstance(args.announce_interval, int | None)  # pyright: ignore[reportAny] # nosec B101
+    assert isinstance(args.announce_interval, int | None)  # pyright: ignore[reportAny]
     announce_interval = args.announce_interval
 
-    assert isinstance(args.name, str)  # pyright: ignore[reportAny] # nosec B101
+    assert isinstance(args.name, str)  # pyright: ignore[reportAny]
     name = args.name.encode()
 
-    assert isinstance(args.allow_all_read, bool)  # pyright: ignore[reportAny] # nosec B101
+    assert isinstance(args.allow_all_read, bool)  # pyright: ignore[reportAny]
     allow_all_read = args.allow_all_read
 
-    assert isinstance(args.allow_read, list)  # pyright: ignore[reportAny]# nosec B101
-    assert all(x for x in args.allow_read if isinstance(x, str))  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]# nosec B101
+    assert isinstance(args.allow_read, list)  # pyright: ignore[reportAny]
+    assert all(x for x in args.allow_read if isinstance(x, str))  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
     read_list = set(cast(list[str], args.allow_read))
 
     for allow in read_list:
         if not is_valid_hexhash(allow):
             raise ValueError(f"Invalid read hexhash: {allow}")
 
-    assert isinstance(args.allow_debug, list)  # pyright: ignore[reportAny]# nosec B101
-    assert all(x for x in args.allow_debug if isinstance(x, str))  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]# nosec B101
+    assert isinstance(args.allow_debug, list)  # pyright: ignore[reportAny]
+    assert all(x for x in args.allow_debug if isinstance(x, str))  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
     debug_list = set(cast(list[str], args.allow_debug))
 
     for allow in debug_list:

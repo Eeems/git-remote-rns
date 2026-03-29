@@ -1,5 +1,7 @@
 .PHONY: help requirements test clean review build wheel sdist list-tests
 
+SHELL := bash
+
 VERSION := $(shell grep -m 1 version pyproject.toml | tr -s ' ' | tr -d '"' | tr -d "'" | cut -d' ' -f3)
 PACKAGE := $(shell grep -m 1 name pyproject.toml | tr -s ' ' | tr -d '"' | tr -d "'" | cut -d' ' -f3)
 
@@ -104,6 +106,7 @@ list-tests: ## List all available tests
 	python -m pytest \
 	  --collect-only \
 	  --quiet \
+	  --disable-warnings \
 	  tests/ \
 	| grep -v ' tests collected in ' \
 	| xargs -n1
@@ -158,31 +161,43 @@ clean: ## Remove build artifacts
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 	find . -type f -name "*.pyc" -delete 2>/dev/null || true
 
+whitelist: requirements ## Generate lint whitelists
+	@set -e;\
+	. ${VENV_BIN_ACTIVATE}; \
+	rm -f rngit/__whitelist.py; \
+ 	python -m vulture --make-whitelist rngit/ >rngit/__whitelist.py || true; \
+	rm -f tests/__whitelist.py; \
+ 	python -m vulture --make-whitelist tests/ >tests/__whitelist.py || true
+
+
 lint: requirements ## Lint the codebase
 	@set -e;\
 	. ${VENV_BIN_ACTIVATE}; \
-	python -m basedpyright \
-	  --warnings \
-	  rngit \
-	  tests; \
-	python -m prospector \
-	  --profile strictness_veryhigh \
-	  --with-tool pyroma \
-	  --with-tool vulture \
-	  --with-tool bandit \
-	  --with-tool pyright \
-	  --with-tool ruff \
-	  --without-tool pycodestyle \
-	  rngit; \
-	python -m prospector \
-	  --profile strictness_veryhigh \
-	  --with-tool pyroma \
-	  --with-tool vulture \
-	  --with-tool bandit \
-	  --with-tool pyright \
-	  --with-tool ruff \
-	  --without-tool pycodestyle \
-	  tests
+	runtool() { \
+	  tool=$$1; \
+	  shift; \
+	  echo -n "Running $$tool: "; \
+	  set +e; \
+	  output=$$(python -um "$$tool" $$@ 2>&1); \
+	  ret=$$?; \
+	  set -e; \
+	  if [[ $$ret -ne 0 ]];then \
+	    echo "FAIL ($$ret)"; \
+	    echo "$$output"; \
+	    exit $$ret; \
+	  fi; \
+	  echo "OKAY"; \
+	}; \
+	runtool pylint --recursive=yes .; \
+	runtool ruff check; \
+	for dir in rngit tests;do \
+	  for tool in basedpyright vulture;do \
+	    runtool "$$tool" "$$dir"; \
+	  done; \
+	done; \
+	runtool bandit --recursive --configfile pyproject.toml .; \
+	runtool dodgy --zero-exit; \
+	runtool pyroma .
 
 review: ## Have coderabbit review the code
 	@if command -v coderabbit >/dev/null 2>&1; then \

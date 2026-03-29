@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Git remote helper for syncing repositories over Reticulum"
 requires-python = ">=3.11"
 license = "MIT"
-authors = [{name = "Eeems"}]
+authors = [{name = "Eeems", email="eeems@eeems.email"}]
 dependencies = ["rns>=1.1.4", "lxmf>=0.9.4"]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -20,6 +20,13 @@ classifiers = [
     "Topic :: Software Development :: Version Control :: Git",
 ]
 dynamic = ["readme"]
+keywords = [
+    "git",
+    "rns",
+    "reticulum",
+    "remote",
+    "helper",
+]
 
 [project.urls]
 Homepage = "https://github.com/Eeems/git-remote-rns"
@@ -27,7 +34,16 @@ Repository = "https://github.com/Eeems/git-remote-rns.git"
 Issues = "https://github.com/Eeems/git-remote-rns/issues"
 
 [project.optional-dependencies]
-dev = ["pytest>=7.0", "prospector[with_everything]", 'basedpyright']
+dev = [
+    "pytest",
+    'basedpyright',
+    "bandit",
+    "dodgy",
+    "pylint",
+    "pyroma",
+    "ruff",
+    "vulture",
+]
 
 [project.scripts]
 git-remote-rns = "rngit.__main__:client"
@@ -45,23 +61,62 @@ readme = {file= ["README.md"], content-type = "text/markdown"}
 packages = ["rngit"]
 
 [tool.ruff]
-exclude = [".venv", "typings", "build"]
+exclude = [".venv", "build", "**/__whitelist.py"]
 
 [tool.pyright]
-exclude = [".venv/**", "typings/**", "build/**"]
+exclude = [".venv", "build", "**/__whitelist.py"]
 reportMissingTypeStubs = false
+
+[tool.pylint]
+ignore-paths = [
+    ".venv/",
+    "build/",
+    "rngit/__whitelist.py",
+    "tests/__whitelist.py",
+    ".web/"
+]
 
 [tool.pylint."messages control"]
 disable = [
-	"line-too-long",
-	"invalid-name",
-	"global-statement",
-	"broad-exception-caught",
-	"too-many-statements",
-	"too-many-return-statements",
-	"too-many-branches",
-	"too-many-locals"
+    "line-too-long",
+    "invalid-name",
+    "global-statement",
+    "broad-exception-caught",
+    "too-many-statements",
+    "too-many-return-statements",
+    "too-many-branches",
+    "too-many-locals",
+    "too-many-arguments",
+    "too-many-positional-arguments",
+    "too-many-instance-attributes",
+    "missing-module-docstring",
+    "missing-class-docstring",
+    "missing-function-docstring"
+]
+
+[tool.vulture]
+ignore_names = ["__*", "_*", "_"]
+ignore_decorators = [
+    "@app.request",
+    '@pytest.fixture',
+]
+exclude = [
+    ".venv/",
+    "build/",
+    ".web/",
 ]
 
 [tool.bandit]
-exclude_dirs = [".venv", "typings", "build"]
+exclude_dirs = [
+    ".venv/",
+    "build/",
+    "**/__whitelist.py",
+    ".*/"
+]
+skips = [
+    'B101',
+    'B404',
+    "B603",
+    "B607",
+    "B311",
+]
