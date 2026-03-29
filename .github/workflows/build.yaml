@@ -47,6 +47,7 @@ jobs:
           set -e
           pip install wheel packaging
           git config --global user.name "Github Runner"
+          git config --global init.defaultBranch trunk
           make test
   build-wheel:
     name: Build wheel
