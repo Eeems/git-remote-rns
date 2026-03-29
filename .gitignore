@@ -46,4 +46,4 @@ Thumbs.db
 .ruff_cache/
 .pytest_cache/
 wheelhouse/
-.web/
+.repos/

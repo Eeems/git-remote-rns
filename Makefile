@@ -90,21 +90,21 @@ test: requirements-test ## Run tests
 	  -vv \
 	  tests/
 
-.web:
-	mkdir -p .web
+.repos:
+	mkdir -p .repos
 
-test-web: .web requirements-web ## Run rngit-web for testing
-	@cd .web;\
+test-web: .repos requirements-web ## Run rngit-web for testing
+	@cd .repos;\
 	if [ ! -d git-remote-rns ];then \
 	  git clone https://github.com/Eeems/git-remote-rns; \
 	fi
-	@cd .web;\
+	@cd .repos;\
 	if [ ! -d empty ];then \
 	  mkdir empty; \
 	  cd empty; \
 	  git init; \
 	fi
-	@cd .web;\
+	@cd .repos;\
 	if [ ! -d empty.git ];then \
 	  mkdir empty.git; \
 	  cd empty.git; \
@@ -115,7 +115,33 @@ test-web: .web requirements-web ## Run rngit-web for testing
 	  rngit-web \
 	  --verbose \
 	  --allow-debug 1b72330713792d8fb086e881c52c684c \
-	  .web
+	  .repos
+
+test-server: .repos requirements-web ## Run rngit-web for testing
+	@cd .repos;\
+	if [ ! -d git-remote-rns ];then \
+	  git clone https://github.com/Eeems/git-remote-rns; \
+	fi
+	@cd .repos;\
+	if [ ! -d empty ];then \
+	  mkdir empty; \
+	  cd empty; \
+	  git init; \
+	fi
+	@cd .repos;\
+	if [ ! -d empty.git ];then \
+	  mkdir empty.git; \
+	  cd empty.git; \
+	  git init --bare; \
+	fi
+	@. ${VENV_BIN_ACTIVATE}; \
+	python -m rngit \
+	  rngit \
+	  --verbose \
+	  --nomadnet \
+	  --allow-read 1b72330713792d8fb086e881c52c684c \
+	  --allow-write 4bbc9219ce924a7d77e00584523c2d4e \
+	  .repos
 
 
 list-tests: ## List all available tests

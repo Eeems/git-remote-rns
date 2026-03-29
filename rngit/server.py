@@ -3,6 +3,7 @@ import argparse
 import logging
 import os
 import subprocess
+import sys
 import time
 import traceback
 from collections.abc import Sequence
@@ -396,6 +397,13 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
         dest="allow_all_read",
         help="Allow any connection to read the repository",
     )
+    _ = parser.add_argument(
+        "-N",
+        "--nomadnet",
+        action="store_true",
+        help="Enable the nomadnet host",
+        dest="nomadnet",
+    )
     args = parser.parse_args(argv)
 
     assert isinstance(args.repo, str)  # pyright: ignore[reportAny]
@@ -416,6 +424,9 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
 
     assert isinstance(args.verbose, bool)  # pyright: ignore[reportAny]
     verbose = args.verbose
+
+    assert isinstance(args.nomadnet, bool)  # pyright: ignore[reportAny]
+    nomadnet = args.nomadnet
 
     assert isinstance(args.identity, str | None)  # pyright: ignore[reportAny]
     identity_path = args.identity
@@ -515,13 +526,41 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
         RNS.Destination.ALLOW_ALL,
     )
     server_destination.set_link_established_callback(on_link_established)  # pyright: ignore[reportUnknownMemberType]
-
     _ = server_destination.announce(name)  # pyright: ignore[reportUnknownMemberType]
+
+    process: subprocess.Popen[bytes] | None = None
+    if nomadnet:
+        process = subprocess.Popen(
+            [
+                sys.executable,
+                "-m",
+                "rngit",
+                "rngit-web",
+                repo_path,
+                f"--identity={identity_path}",
+                *(["--verbose"] if verbose else []),
+                f"--name={name}",
+                *(
+                    []
+                    if announce_interval is None
+                    else [f"--announce-interval={announce_interval}"]
+                ),
+                *(["--allow-all-read"] if allow_all_read else []),
+                *[f"--allow-read={x}" for x in read_list],
+            ],
+        )
+
     if announce_interval is None:
         while True:
+            if process is not None and process.returncode is not None:
+                return process.returncode
+
             time.sleep(10)
 
     while True:
+        if process is not None and process.returncode is not None:
+            return process.returncode
+
         time.sleep(announce_interval)
         log.debug("Sending announce")
         _ = server_destination.announce(name)  # pyright: ignore[reportUnknownMemberType]
