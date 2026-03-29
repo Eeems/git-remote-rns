@@ -5,6 +5,7 @@ import logging
 import math
 import os
 import subprocess
+import traceback
 from collections.abc import (
     Generator,
     Sequence,
@@ -115,7 +116,7 @@ def tree(repo: str, ref: str) -> Generator[tuple[str, str, str, str], None, None
             raise
 
 
-def readme(repo: str, ref: str = "HEAD") -> str:
+def readme(repo: str, ref: str = "HEAD") -> bytes:
     for _, type, sha, name in tree(repo, ref):
         if type != "blob":
             continue
@@ -124,9 +125,20 @@ def readme(repo: str, ref: str = "HEAD") -> str:
         if lowername != "readme" and os.path.splitext(lowername)[0] != "readme":
             continue
 
-        return git(repo, "cat-file", "blob", sha).decode()
+        data = git(repo, "cat-file", "blob", sha)
+        if lowername.endswith(".md"):
+            try:
+                data = micron.convert_markdown(data)
 
-    return ""
+            except Exception:
+                log.error(traceback.format_exc())
+
+        else:
+            data = micron.escape(data)
+
+        return data
+
+    return b""
 
 
 def commits(
@@ -215,7 +227,7 @@ def _(  # pylint: disable=E0102 # noqa: F811
         + b" | "
         + micron.page_link("tags", "tags", {"repo": repo})
         + b"\n>> \n"
-        + micron.escape(readme(repo))
+        + readme(repo)
     )
 
 
@@ -261,7 +273,7 @@ def _(  # pylint: disable=E0102 # noqa: F811
         + b" | "
         + micron.page_link("commits", "commits", {"repo": repo, "branch": branch})
         + b"\n>> \n"
-        + micron.escape(readme(repo, branch))
+        + readme(repo, branch)
     )
 
 
@@ -302,7 +314,7 @@ def _(  # pylint: disable=E0102 # noqa: F811
         + b" | "
         + micron.page_link("commits", "commits", {"repo": repo, "tag": tag})
         + b"\n>> \n"
-        + micron.escape(readme(repo, tag))
+        + readme(repo, tag)
     )
 
 
@@ -474,9 +486,16 @@ def _(  # pylint: disable=E0102 # noqa: F811
         params["ref"] = ref
 
     try:
-        content = micron.escape(
-            git(repo, "cat-file", "blob", f"{ref or 'HEAD'}:{path}")
-        )
+        content = git(repo, "cat-file", "blob", f"{ref or 'HEAD'}:{path}")
+        if path.endswith(".md"):
+            try:
+                content = micron.convert_markdown(content)
+
+            except Exception:
+                log.error(traceback.format_exc())
+
+        else:
+            content = micron.escape(content)
 
     except UnicodeDecodeError:
         content = b"(binary content)"
@@ -516,6 +535,9 @@ def _(  # pylint: disable=E0102 # noqa: F811
 
     return (
         header(f"commit: {sha}", breadcrumbs)
+        + b">> "
+        + micron.page_link("tree", "tree", {"ref": sha, **params})
+        + b"\n>> \n"
         + micron.escape(git(repo, "log", "--max-count=1", sha, "--pretty=fuller"))
         + b"\n"
         + b"\n".join(content)

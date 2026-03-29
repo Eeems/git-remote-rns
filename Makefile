@@ -1,4 +1,4 @@
-.PHONY: help requirements test clean review build wheel sdist list-tests
+.PHONY: help requirements requirements-web requirements-test requirements-dev test clean review build wheel sdist list-tests
 
 SHELL := bash
 
@@ -58,16 +58,36 @@ $(VENV_BIN_ACTIVATE):
 
 requirements: $(VENV_BIN_ACTIVATE) pyproject.toml ## Install development requirements
 	@. ${VENV_BIN_ACTIVATE}; \
-	python -m pip install -e ".[dev]" -q
+	python -m pip install \
+	  --quiet \
+	  --editable \
+	  .
 
 requirements-web: $(VENV_BIN_ACTIVATE) pyproject.toml ## Install web requirements
 	@. ${VENV_BIN_ACTIVATE}; \
-	python -m pip install -e ".[web]" -q
+	python -m pip install \
+	  --quiet \
+	  --editable \
+	  ".[web]"
 
-test: requirements ## Run tests
+requirements-dev: $(VENV_BIN_ACTIVATE) pyproject.toml ## Install web requirements
+	@. ${VENV_BIN_ACTIVATE}; \
+	python -m pip install \
+	  --quiet \
+	  --editable \
+	  ".[dev]"
+
+requirements-test: $(VENV_BIN_ACTIVATE) pyproject.toml ## Install web requirements
+	@. ${VENV_BIN_ACTIVATE}; \
+	python -m pip install \
+	  --quiet \
+	  --editable \
+	  ".[test]"
+
+test: requirements-test ## Run tests
 	@. ${VENV_BIN_ACTIVATE}; \
 	python -m pytest \
-	  --verbose \
+	  -vv \
 	  tests/
 
 .web:
@@ -100,11 +120,11 @@ test-web: .web requirements-web ## Run rngit-web for testing
 
 list-tests: ## List all available tests
 	@if [ ! -f ${VENV_BIN_ACTIVATE} ];then \
-	  $(MAKE) requirements >/dev/null; \
+	  $(MAKE) requirements-test >/dev/null; \
 	fi
 	@. ${VENV_BIN_ACTIVATE}; \
 	if ! python -m pytest --version >/dev/null;then \
-	  $(MAKE) requirements >/dev/null; \
+	  $(MAKE) requirements-test >/dev/null; \
 	fi
 	@. ${VENV_BIN_ACTIVATE}; \
 	python -m pytest \
@@ -117,10 +137,10 @@ list-tests: ## List all available tests
 
 ifndef SKIP_TESTS
 define test-target
-$2: requirements
+$2: requirements-test
 	@. ${VENV_BIN_ACTIVATE}; \
 	python -m pytest \
-	  --verbose \
+	  -vv \
 	  $1
 endef
 
@@ -165,7 +185,7 @@ clean: ## Remove build artifacts
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 	find . -type f -name "*.pyc" -delete 2>/dev/null || true
 
-whitelist: requirements ## Generate lint whitelists
+whitelist: requirements-dev ## Generate lint whitelists
 	@set -e;\
 	. ${VENV_BIN_ACTIVATE}; \
 	rm -f rngit/__whitelist.py; \
@@ -174,7 +194,7 @@ whitelist: requirements ## Generate lint whitelists
  	python -m vulture --make-whitelist tests/ >tests/__whitelist.py || true
 
 
-lint: requirements ## Lint the codebase
+lint: requirements-dev ## Lint the codebase
 	@set -e;\
 	. ${VENV_BIN_ACTIVATE}; \
 	runtool() { \

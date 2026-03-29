@@ -38,8 +38,10 @@ Repository = "https://github.com/Eeems/git-remote-rns.git"
 Issues = "https://github.com/Eeems/git-remote-rns/issues"
 
 [project.optional-dependencies]
-dev = [
+test = [
     "pytest",
+]
+dev = [
     'basedpyright',
     "bandit",
     "dodgy",
@@ -50,6 +52,7 @@ dev = [
 ]
 web = [
     "humanize>=4.15.0",
+    "marko>=2.2.2",
 ]
 
 [project.scripts]
