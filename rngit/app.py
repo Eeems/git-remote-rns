@@ -13,11 +13,11 @@ from typing import (
     Callable,
     NoReturn,
     cast,
-    override,
 )
 
 import RNS
 
+from ._compat import override
 from .shared import is_valid_hexhash
 
 log: logging.Logger = logging.getLogger(__name__)
