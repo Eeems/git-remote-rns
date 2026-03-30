@@ -98,7 +98,7 @@ with tempfile.TemporaryDirectory(prefix="rngit_fuzz_") as t:
             print(f"data: {data}")
             raise
 
-    argv = [sys.argv[0], corpus, *sys.argv[1:]]
+    argv = [sys.argv[0], corpus, "-timeout=10", *sys.argv[1:]]
     print("argv: ", end="")
     print(argv)
     _ = atheris.Setup(argv, TestOneInput)
