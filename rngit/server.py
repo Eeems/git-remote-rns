@@ -88,11 +88,11 @@ def request_repo_path(data: bytes) -> tuple[str | None, tuple[str, bytes] | None
         assert _repo_path is not None, "_repo_path not set"
         parts = data.split(b"\n", maxsplit=1)
         path = parts[0].decode()
-        if ".." in path:
+        if ".." in path.split("/"):
             return "Invalid path", None
 
-        base_path = os.path.realpath(_repo_path)
-        repo_path = os.path.realpath(os.path.join(base_path, path))
+        base_path = os.path.abspath(_repo_path)
+        repo_path = os.path.abspath(os.path.join(base_path, path))
         if os.path.commonpath([base_path, repo_path]) != base_path:
             return "Invalid path", None
 

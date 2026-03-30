@@ -75,6 +75,10 @@ class TemplateExists(Exception):
     pass
 
 
+class ThreadTimeout(BaseException):
+    pass
+
+
 Handler = Callable[
     [
         str,
@@ -538,6 +542,9 @@ class Application:
                             except Exception as e:
                                 res = e
 
+                            except ThreadTimeout:
+                                log.error("Request %s thread interrupted", request_hex)
+
                         thread = threading.Thread(
                             target=target,  # pyright: ignore[reportUnknownArgumentType]
                             args=(
@@ -555,14 +562,18 @@ class Application:
                                 remote_identity,
                                 path,
                             )
+                            thread_id = ctypes.c_long(thread.ident)  # pyright: ignore[reportArgumentType]
                             returncode = ctypes.pythonapi.PyThreadState_SetAsyncExc(  # pyright: ignore[reportAny]
-                                thread.native_id, ctypes.py_object(SystemExit)
+                                thread_id,
+                                ctypes.py_object(ThreadTimeout),
                             )
-                            if returncode > 1:
-                                ctypes.pythonapi.PyThreadState_SetAsyncExc(
-                                    thread.native_id, 0
-                                )
+                            if returncode < 1:
+                                log.error("No threads had exception set!")
 
+                            elif returncode > 1:
+                                ctypes.pythonapi.PyThreadState_SetAsyncExc(thread_id, 0)
+
+                            thread.join()
                             return self.template("timeout")()
 
                         if isinstance(res, Exception):

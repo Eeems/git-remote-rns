@@ -37,12 +37,17 @@ class InvalidRepoPath(Exception):
 
 
 def repo_dir(repo: str) -> str:
-    if ".." in repo:
+    if ".." in repo.split("/"):
         raise InvalidRepoPath("Paths cannot contain ..")
 
+    repo = os.path.normpath(repo)
     assert app.args is not None
     assert isinstance(app.args.repo, str)  # pyright: ignore[reportAny]
-    path = os.path.join(app.args.repo, repo)
+    base_path = os.path.abspath(app.args.repo)
+    path = os.path.abspath(os.path.join(base_path, repo))
+    if os.path.commonpath([base_path, path]) != base_path:
+        raise InvalidRepoPath("Path traversal detected ..")
+
     if not is_repo(path):
         raise InvalidRepoPath(f"{repo} is not a repository")
 
