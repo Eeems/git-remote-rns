@@ -19,7 +19,7 @@ class packets(Enum):
 class ExitCodes(Enum):
     SUCCESS = 0
     EXCEPTION = -errno.EFAULT
-    UNKOWN_COMMAND = -errno.EBADRQC
+    UNKNOWN_COMMAND = -errno.EBADRQC
     REMOTE_ERROR = -errno.EBADMSG
     BAD_ARGUMENT = -errno.EINVAL
     NETWORK_ERROR = -errno.ECANCELED
@@ -43,11 +43,15 @@ def is_valid_hexhash(hexhash: str) -> bool:
 
 
 def is_repo(path: str) -> bool:
-    return subprocess.check_output(
-        ["git", "rev-parse", "--git-dir"],
-        cwd=path,
-        text=True,
-    ).rstrip() in (".", ".git")
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "--git-dir"],
+            cwd=path,
+            text=True,
+        ).rstrip() in (".", ".git")
+
+    except subprocess.CalledProcessError:
+        return False
 
 
 def _normalize_repo(repo: str, root_dir: str) -> str:
@@ -71,7 +75,8 @@ def find_repos(root_dir: str) -> list[str]:
                 "-exec",
                 "bash",
                 "-c",
-                "cd {}; realpath $(git rev-parse --git-dir)",
+                "cd $0; realpath $(git rev-parse --git-dir)",
+                "{}",
                 ";",
             ],
             text=True,

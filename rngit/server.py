@@ -309,13 +309,13 @@ def on_delete_request(
             return b"\1" + err.encode()
 
         assert res is not None
-        repo_path, ref = res
+        repo_path, data = res
 
+        ref = data.decode()
         if not ref:
             return b"\1No ref supplied"
 
         log_request(path, repo_path, ref)
-
         proc = subprocess.run(  # nosec B607 B603
             ["git", "update-ref", "-d", ref],
             cwd=repo_path,
@@ -359,7 +359,7 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
     _ = parser.add_argument(
         "-n",
         "--name",
-        help="Name to annouce",
+        help="Name to announce",
         dest="name",
         default=f"rngit {__version__}",
     )

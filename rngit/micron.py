@@ -25,6 +25,13 @@ m1 = re.compile("^>", flags=re.MULTILINE)
 m2 = re.compile("^-", flags=re.MULTILINE)
 
 
+def escape_inline(mu: str | bytes) -> bytes:
+    if isinstance(mu, bytes):
+        mu = mu.decode()
+
+    return escape(" " + mu)[1:]
+
+
 def escape(mu: str | bytes) -> bytes:
     if isinstance(mu, bytes):
         mu = mu.decode()
@@ -44,8 +51,8 @@ def link(
     params: dict[str, str] | None = None,
     address: str | None = None,
 ) -> bytes:
-    text = escape(text or path).decode()
-    path = escape(path).decode()
+    text = escape_inline(text or path).decode()
+    path = escape_inline(path).decode()
     address = address or ""
     fragment = (
         "`"
@@ -88,7 +95,7 @@ class MicronRenderer(marko.renderer.Renderer):  # pylint: disable=R0904
     def render_fenced_code(self, element: marko.block.FencedCode) -> str:
         children = self.render_children(element)  # pyright: ignore[reportAny]
         assert isinstance(children, str)
-        lang = escape(element.lang).decode()
+        lang = escape_inline(element.lang).decode()
         return f"`F222`Bddd\n`*{lang}`*\n{children}\n``"
 
     def render_html_block(self, element: marko.block.HTMLBlock) -> str:
@@ -145,7 +152,7 @@ class MicronRenderer(marko.renderer.Renderer):  # pylint: disable=R0904
     def render_auto_link(self, element: marko.inline.AutoLink) -> str:
         dest = self.render_children(element)  # pyright: ignore[reportAny]
         assert isinstance(dest, str)
-        dest = escape(dest).decode()
+        dest = escape_inline(dest).decode()
         # TODO parse link to get params and address # pylint: disable=W0511
         return f"`_`[{dest}]`_"
 
@@ -159,17 +166,21 @@ class MicronRenderer(marko.renderer.Renderer):  # pylint: disable=R0904
         return f"`*{children}`*"
 
     def render_image(self, element: marko.inline.Image) -> str:
-        dest = escape(element.dest).decode()
+        dest = escape_inline(element.dest).decode()
         title = None
         if element.title:
             title = element.title
 
         elif element.children:
-            title = self.render(element.children[0])  # pyright: ignore[reportAny,reportArgumentType]
-            assert isinstance(title, str)
+            if isinstance(element.children, list):
+                title = self.render(element.children[0])  # pyright: ignore[reportAny]
+                assert isinstance(title, str)
+
+            elif isinstance(element.children, str):
+                title = element.children
 
         if title is not None:
-            title = escape(title).decode()
+            title = escape_inline(title).decode()
             return f"`_`[{title}`{dest}]`_"
 
         return f"`_`[{dest}]`_"
@@ -184,9 +195,9 @@ class MicronRenderer(marko.renderer.Renderer):  # pylint: disable=R0904
     def render_link(self, element: marko.inline.Link) -> str:
         children = self.render_children(element)  # pyright: ignore[reportAny]
         assert isinstance(children, str)
-        children = escape(children).decode()
+        children = escape_inline(children).decode()
         # TODO parse link to get params and address # pylint: disable=W0511
-        dest = escape(element.dest).decode()
+        dest = escape_inline(element.dest).decode()
         return f"`_`[{children}`{dest}]`_"
 
     def render_literal(self, element: marko.inline.Literal) -> str:

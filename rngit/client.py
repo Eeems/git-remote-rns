@@ -381,7 +381,7 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
 
                 case _:
                     _ = sys.stderr.write(f"Unknown command: {parts[0]}\n")
-                    return ExitCodes.UNKOWN_COMMAND.value
+                    return ExitCodes.UNKNOWN_COMMAND.value
 
         log.debug("End of stdin")
 

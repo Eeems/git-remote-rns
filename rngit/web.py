@@ -143,6 +143,7 @@ def readme(repo: str, ref: str = "HEAD") -> bytes:
 
             except Exception:
                 log.error(traceback.format_exc())
+                data = micron.escape(data)
 
         else:
             data = micron.escape(data)
@@ -153,7 +154,7 @@ def readme(repo: str, ref: str = "HEAD") -> bytes:
 
 
 def commits(
-    repo: str, ref: str | None = None, count: int = 100, skip: int = 0
+    repo: str, ref: str | None = None, count: int = 50, skip: int = 0
 ) -> Generator[tuple[tuple[str, str], tuple[str, str], datetime, list[str], str]]:
     for line in (
         git(
@@ -420,8 +421,8 @@ def _(  # pylint: disable=E0102 # noqa: F811
     for (short_sha, sha), (author, _), date, _, subject in commits(
         repo,
         ref,
-        count=100,
-        skip=page * 100,
+        count=50,
+        skip=page * 50,
     ):
         content.append(
             micron.page_link("commit", short_sha, {"sha": sha, **params})
@@ -451,9 +452,9 @@ def _(  # pylint: disable=E0102 # noqa: F811
             )
         )
 
-    last_page = math.ceil(total / 100)
+    last_page = math.ceil(total / 50)
     footer.append(f"page {page + 1} of {last_page}".encode())
-    if (page + 1) * 100 < total:
+    if (page + 1) * 50 < total:
         footer.append(
             micron.page_link(
                 "commits",
@@ -496,14 +497,15 @@ def _(  # pylint: disable=E0102 # noqa: F811
     if ref is not None:
         params["ref"] = ref
 
+    content = git(repo, "cat-file", "blob", f"{ref or 'HEAD'}:{path}")
     try:
-        content = git(repo, "cat-file", "blob", f"{ref or 'HEAD'}:{path}")
         if path.endswith(".md"):
             try:
                 content = micron.convert_markdown(content)
 
             except Exception:
                 log.error(traceback.format_exc())
+                content = micron.escape(content)
 
         else:
             content = micron.escape(content)
@@ -534,7 +536,9 @@ def _(  # pylint: disable=E0102 # noqa: F811
         ("commits", "commits", params),
     ]
     content: list[bytes] = []
-    for line in git(repo, "diff", "--name-status", sha).decode().splitlines(False):
+    for line in (
+        git(repo, "diff", "--name-status", f"{sha}~1..{sha}").decode().splitlines(False)
+    ):
         parts = line.split(maxsplit=1)
         if len(parts) != 2:
             raise RuntimeError("Data returned by git doesn't match expected format")
@@ -577,7 +581,11 @@ def _(  # pylint: disable=E0102 # noqa: F811
         ("commit", f"commit: {sha}", {"sha": sha, **params}),
     ]
     content: list[bytes] = []
-    for line in git(repo, "diff", "-w", sha, "--", path).decode().splitlines(False):
+    for line in (
+        git(repo, "diff", "-w", f"{sha}~1..{sha}", "--", path)
+        .decode()
+        .splitlines(False)
+    ):
         color = b""
         if line.startswith("+"):
             color = b"`F0f2"
@@ -620,7 +628,7 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
     _ = parser.add_argument(
         "-n",
         "--name",
-        help="Name to annouce.",
+        help="Name to announce.",
         dest="name",
         default=f"rngit {__version__}",
     )
@@ -699,7 +707,7 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
 
     for allow in debug_list:
         if not is_valid_hexhash(allow):
-            raise ValueError(f"Invalid read hexhash: {allow}")
+            raise ValueError(f"Invalid debug hexhash: {allow}")
 
     if allow_all_read and read_list:
         raise ValueError(

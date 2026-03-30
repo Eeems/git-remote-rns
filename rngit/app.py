@@ -79,6 +79,7 @@ class ThreadTimeout(BaseException):
     pass
 
 
+FileResponse = tuple[BufferedReader, dict[str, bytes]]
 Handler = Callable[
     [
         str,
@@ -87,10 +88,9 @@ Handler = Callable[
         RNS.Identity | None,
         float,
     ],
-    bytes | None,
+    bytes | FileResponse | None,
 ]
 HandlerRegistration = tuple[str, Handler, int, list[str], bool]
-FileResponse = tuple[BufferedReader, dict[str, bytes]]
 RequestHandler = Callable[..., FileResponse | bytes | None]
 PageHandler = Callable[..., bytes | None]
 FileHandler = Callable[..., FileResponse | None]
@@ -247,7 +247,7 @@ class Application:
                 time.sleep(10)
 
         while True:
-            time.sleep(self.announce_interval)
+            time.sleep(self.announce_interval or 0.1)
             self.announce()
 
     def _parse_params(
@@ -342,10 +342,13 @@ class Application:
                 stacktrace += f"\nstderr: {stderr}"
 
             if isinstance(exception.cmd, list):  # pyright: ignore[reportAny]
-                cmd = cast(str, exception.cmd[0])
+                cmd = cast(str | bytes, exception.cmd[0])
 
             else:
-                cmd = cast(str, exception.cmd).split()[0]
+                cmd = cast(str | bytes, exception.cmd).split()[0]
+
+            if isinstance(cmd, bytes):
+                cmd = cmd.decode()
 
             message = f"{cmd} returned with exit code {exception.returncode}"
 
@@ -454,7 +457,7 @@ class Application:
                 request_id: bytes,
                 remote_identity: RNS.Identity | None,
                 request_at: float,
-            ) -> bytes | None:
+            ) -> bytes | FileResponse | None:
                 request_hex = hex(int.from_bytes(request_id, "big"))[2:]
                 self._log_request_state("REQUEST", request_hex, remote_identity, path)
                 if permissions:
@@ -513,7 +516,7 @@ class Application:
                         res: Exception | bytes | FileResponse | None = None
                         if ttl is not False and idx in cache:
                             _ttl, res = cache[idx]
-                            if time.time() < _ttl:
+                            if time.time() <= _ttl:
                                 self._log_request_state(
                                     "CACHED ",
                                     request_hex,
@@ -568,12 +571,21 @@ class Application:
                                 ctypes.py_object(ThreadTimeout),
                             )
                             if returncode < 1:
-                                log.error("No threads had exception set!")
+                                log.error(
+                                    "Request %s thread not found when trying to inject exception",
+                                    request_hex,
+                                )
 
                             elif returncode > 1:
                                 ctypes.pythonapi.PyThreadState_SetAsyncExc(thread_id, 0)
 
-                            thread.join()
+                            thread.join(5)
+                            if thread.is_alive():
+                                log.error(
+                                    "Request %s thread still not stopped, there may now be zombie threads",
+                                    request_hex,
+                                )
+
                             return self.template("timeout")()
 
                         if isinstance(res, Exception):
@@ -586,10 +598,7 @@ class Application:
                             path,
                         )
                         if isinstance(res, bytes | None) and ttl is not False:  # pyright: ignore[reportUnnecessaryIsInstance]
-                            cache[idx] = (
-                                time.time() + ttl if ttl else 0,
-                                res,
-                            )
+                            cache[idx] = (time.time() + ttl, res)
 
                         return res
 
