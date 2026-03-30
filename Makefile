@@ -7,6 +7,10 @@ OBJ := $(shell find rngit -type f)
 OBJ += pyproject.toml
 OBJ += README.md
 
+ifndef FUZZ_RUNS
+FUZZ_RUNS := 1000
+endif
+
 ifndef SKIP_TESTS
 TESTS := $(shell find tests -type f -name '*.py')
 INDIVIDUAL_TESTS := $(shell SKIP_TESTS=1 MAKEFLAGS= make --no-print-directory list-tests)
@@ -87,12 +91,29 @@ requirements-test: requirements-web ## Install test requirements
 	  --editable \
 	  ".[test]"
 
+.PHONY: requirements-fuzz
+requirements-fuzz: requirements-web ## Install test requirements
+	@. ${VENV_BIN_ACTIVATE}; \
+	python -m pip install \
+	  --quiet \
+	  --editable \
+	  ".[fuzz]"
+
 .PHONY: test
 test: requirements-test ## Run tests
 	@. ${VENV_BIN_ACTIVATE}; \
 	python -m pytest \
 	  -vv \
 	  tests/
+
+.PHONY: fuzz
+fuzz: requirements-fuzz ## Run fuzz tests
+	@. ${VENV_BIN_ACTIVATE}; \
+	cd fuzz; \
+	python test_fuzz.py \
+	  corpus \
+	  -rss_limit_mb=2048 \
+	  -atheris_runs=$(FUZZ_RUNS)
 
 .repos:
 	mkdir -p .repos

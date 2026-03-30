@@ -47,3 +47,4 @@ Thumbs.db
 .pytest_cache/
 wheelhouse/
 .repos/
+fuzz/crash-*

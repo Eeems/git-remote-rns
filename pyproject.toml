@@ -41,6 +41,10 @@ Issues = "https://github.com/Eeems/git-remote-rns/issues"
 test = [
     "pytest",
 ]
+fuzz = [
+    "atheris; platform_machine == 'x86_64'",
+]
+
 dev = [
     'basedpyright',
     "bandit",
