@@ -548,7 +548,7 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
                     else [f"--announce-interval={announce_interval}"]
                 ),
                 *(["--allow-all-read"] if allow_all_read else []),
-                *[f"--allow-read={x}" for x in read_list],
+                *([] if allow_all_read else [f"--allow-read={x}" for x in read_list]),
             ],
         )
 

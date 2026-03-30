@@ -94,3 +94,17 @@ import sys
 `_`[alt`/src/address]`_
 """
         )
+
+        assert (
+            micron.convert_markdown("""
+```
+test``
+```
+""")
+            == b"""
+`F222`Bddd
+`*`*
+test\\`\\`
+
+``"""
+        )

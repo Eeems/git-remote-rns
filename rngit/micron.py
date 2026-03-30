@@ -152,13 +152,13 @@ class MicronRenderer(marko.renderer.Renderer):  # pylint: disable=R0904
     def render_auto_link(self, element: marko.inline.AutoLink) -> str:
         dest = self.render_children(element)  # pyright: ignore[reportAny]
         assert isinstance(dest, str)
-        dest = escape_inline(dest).decode()
         # TODO parse link to get params and address # pylint: disable=W0511
         return f"`_`[{dest}]`_"
 
     def render_code_span(self, element: marko.inline.CodeSpan) -> str:
         assert isinstance(element.children, str)
-        return f"`F222`Bddd{element.children}``"
+        children = escape_inline(element.children).decode()
+        return f"`F222`Bddd{children}``"
 
     def render_emphasis(self, element: marko.inline.Emphasis) -> str:
         children = self.render_children(element)  # pyright: ignore[reportAny]
@@ -169,7 +169,7 @@ class MicronRenderer(marko.renderer.Renderer):  # pylint: disable=R0904
         dest = escape_inline(element.dest).decode()
         title = None
         if element.title:
-            title = element.title
+            title = escape_inline(element.title).decode()
 
         elif element.children:
             if isinstance(element.children, list):
@@ -177,10 +177,9 @@ class MicronRenderer(marko.renderer.Renderer):  # pylint: disable=R0904
                 assert isinstance(title, str)
 
             elif isinstance(element.children, str):
-                title = element.children
+                title = escape_inline(element.children).decode()
 
         if title is not None:
-            title = escape_inline(title).decode()
             return f"`_`[{title}`{dest}]`_"
 
         return f"`_`[{dest}]`_"
@@ -195,7 +194,6 @@ class MicronRenderer(marko.renderer.Renderer):  # pylint: disable=R0904
     def render_link(self, element: marko.inline.Link) -> str:
         children = self.render_children(element)  # pyright: ignore[reportAny]
         assert isinstance(children, str)
-        children = escape_inline(children).decode()
         # TODO parse link to get params and address # pylint: disable=W0511
         dest = escape_inline(element.dest).decode()
         return f"`_`[{children}`{dest}]`_"
