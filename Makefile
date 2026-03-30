@@ -1,4 +1,4 @@
-.PHONY: help requirements test clean review build wheel sdist list-tests
+SHELL := bash
 
 VERSION := $(shell grep -m 1 version pyproject.toml | tr -s ' ' | tr -d '"' | tr -d "'" | cut -d' ' -f3)
 PACKAGE := $(shell grep -m 1 name pyproject.toml | tr -s ' ' | tr -d '"' | tr -d "'" | cut -d' ' -f3)
@@ -45,6 +45,7 @@ endef
 export ABI_SCRIPT
 ABI := $(shell python -c "$$ABI_SCRIPT")
 
+.PHONY: help
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-10s\033[0m %s\n", $$1, $$2}'
 
@@ -54,38 +55,125 @@ $(VENV_BIN_ACTIVATE):
 	python -m pip install --upgrade pip; \
 	python -m pip install --upgrade build wheel
 
-requirements: $(VENV_BIN_ACTIVATE) ## Install development requirements
+.PHONY: requirements
+requirements: $(VENV_BIN_ACTIVATE) pyproject.toml ## Install requirements
 	@. ${VENV_BIN_ACTIVATE}; \
-	python -m pip install -e ".[dev]" -q
+	python -m pip install \
+	  --quiet \
+	  --editable \
+	  .
 
-test: requirements ## Run tests
+.PHONY: requirements-web
+requirements-web: $(VENV_BIN_ACTIVATE) pyproject.toml ## Install web requirements
+	@. ${VENV_BIN_ACTIVATE}; \
+	python -m pip install \
+	  --quiet \
+	  --editable \
+	  ".[web]"
+
+.PHONY: requirements-dev
+requirements-dev: $(VENV_BIN_ACTIVATE) pyproject.toml ## Install dev requirements
+	@. ${VENV_BIN_ACTIVATE}; \
+	python -m pip install \
+	  --quiet \
+	  --editable \
+	  ".[dev]"
+
+.PHONY: requirements-test
+requirements-test: requirements-web ## Install test requirements
+	@. ${VENV_BIN_ACTIVATE}; \
+	python -m pip install \
+	  --quiet \
+	  --editable \
+	  ".[test]"
+
+.PHONY: test
+test: requirements-test ## Run tests
 	@. ${VENV_BIN_ACTIVATE}; \
 	python -m pytest \
-	  --verbose \
+	  -vv \
 	  tests/
 
+.repos:
+	mkdir -p .repos
+
+.PHONY: test-web
+test-web: .repos requirements-web ## Run rngit-web for testing
+	@cd .repos;\
+	if [ ! -d git-remote-rns ];then \
+	  git clone https://github.com/Eeems/git-remote-rns; \
+	fi
+	@cd .repos;\
+	if [ ! -d empty ];then \
+	  mkdir empty; \
+	  cd empty; \
+	  git init; \
+	fi
+	@cd .repos;\
+	if [ ! -d empty.git ];then \
+	  mkdir empty.git; \
+	  cd empty.git; \
+	  git init --bare; \
+	fi
+	@. ${VENV_BIN_ACTIVATE}; \
+	python -m rngit \
+	  rngit-web \
+	  --verbose \
+	  --allow-debug 1b72330713792d8fb086e881c52c684c \
+	  .repos
+
+.PHONY: test-server
+test-server: .repos requirements-web ## Run rngit node with the web server for testing
+	@cd .repos;\
+	if [ ! -d git-remote-rns ];then \
+	  git clone https://github.com/Eeems/git-remote-rns; \
+	fi
+	@cd .repos;\
+	if [ ! -d empty ];then \
+	  mkdir empty; \
+	  cd empty; \
+	  git init; \
+	fi
+	@cd .repos;\
+	if [ ! -d empty.git ];then \
+	  mkdir empty.git; \
+	  cd empty.git; \
+	  git init --bare; \
+	fi
+	@. ${VENV_BIN_ACTIVATE}; \
+	python -m rngit \
+	  rngit \
+	  --verbose \
+	  --nomadnet \
+	  --allow-read 1b72330713792d8fb086e881c52c684c \
+	  --allow-write 4bbc9219ce924a7d77e00584523c2d4e \
+	  .repos
+
+.PHONY: list-tests
 list-tests: ## List all available tests
 	@if [ ! -f ${VENV_BIN_ACTIVATE} ];then \
-	  $(MAKE) requirements >/dev/null; \
+	  $(MAKE) requirements-test >/dev/null; \
 	fi
 	@. ${VENV_BIN_ACTIVATE}; \
 	if ! python -m pytest --version >/dev/null;then \
-	  $(MAKE) requirements >/dev/null; \
+	  $(MAKE) requirements-test >/dev/null; \
 	fi
 	@. ${VENV_BIN_ACTIVATE}; \
 	python -m pytest \
 	  --collect-only \
 	  --quiet \
+	  --disable-warnings \
 	  tests/ \
 	| grep -v ' tests collected in ' \
 	| xargs -n1
 
 ifndef SKIP_TESTS
 define test-target
-$2: requirements
+.PHONY: $2
+$2: requirements-test
 	@. ${VENV_BIN_ACTIVATE}; \
 	python -m pytest \
-	  --verbose \
+	  -vv \
 	  $1
 endef
 
@@ -107,13 +195,16 @@ $(foreach T,\
 )
 endif
 
+.PHONY: build
 build: sdist wheel ## Build wheel and sdist
 
 dist:
 	mkdir -p dist
 
+.PHONY: wheel
 wheel: dist/git_remote_rns-${VERSION}-${ABI}-${ABI}-${PLATFORM}.whl # Build wheel
 
+.PHONY: sdist
 sdist: dist/git_remote_rns-${VERSION}.tar.gz # Build sdist
 
 dist/git_remote_rns-${VERSION}-${ABI}-${ABI}-${PLATFORM}.whl: $(VENV_BIN_ACTIVATE) dist $(OBJ)
@@ -124,38 +215,54 @@ dist/git_remote_rns-${VERSION}.tar.gz: $(VENV_BIN_ACTIVATE) dist $(OBJ)
 	@. ${VENV_BIN_ACTIVATE}; \
 	python -m build --sdist
 
+.PHONY: clean
 clean: ## Remove build artifacts
 	rm -rf build/ dist/ *.egg-info/ .venv/
 	rm -rf *.build *.dist
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 	find . -type f -name "*.pyc" -delete 2>/dev/null || true
 
-lint: requirements ## Lint the codebase
+.PHONY: whitelist
+whitelist: requirements-dev ## Generate lint whitelists
 	@set -e;\
 	. ${VENV_BIN_ACTIVATE}; \
-	python -m basedpyright \
-	  --warnings \
-	  rngit \
-	  tests; \
-	python -m prospector \
-	  --profile strictness_veryhigh \
-	  --with-tool pyroma \
-	  --with-tool vulture \
-	  --with-tool bandit \
-	  --with-tool pyright \
-	  --with-tool ruff \
-	  --without-tool pycodestyle \
-	  rngit; \
-	python -m prospector \
-	  --profile strictness_veryhigh \
-	  --with-tool pyroma \
-	  --with-tool vulture \
-	  --with-tool bandit \
-	  --with-tool pyright \
-	  --with-tool ruff \
-	  --without-tool pycodestyle \
-	  tests
+	rm -f rngit/__whitelist.py; \
+	python -m vulture --make-whitelist rngit/ >rngit/__whitelist.py || true; \
+	rm -f tests/__whitelist.py; \
+	python -m vulture --make-whitelist tests/ >tests/__whitelist.py || true
 
+
+.PHONY: lint
+lint: requirements-dev requirements-web requirements-test ## Lint the codebase
+	@set -e;\
+	. ${VENV_BIN_ACTIVATE}; \
+	runtool() { \
+	  tool=$$1; \
+	  shift; \
+	  echo -n "Running $$tool: "; \
+	  set +e; \
+	  output=$$(python -um "$$tool" $$@ 2>&1); \
+	  ret=$$?; \
+	  set -e; \
+	  if [[ $$ret -ne 0 ]];then \
+	    echo "FAIL ($$ret)"; \
+	    echo "$$output"; \
+	    exit $$ret; \
+	  fi; \
+	  echo "OKAY"; \
+	}; \
+	runtool pylint --recursive=yes .; \
+	runtool ruff check; \
+	for dir in rngit tests;do \
+	  for tool in basedpyright vulture;do \
+	    runtool "$$tool" "$$dir"; \
+	  done; \
+	done; \
+	runtool bandit --recursive --configfile pyproject.toml .; \
+	runtool dodgy --zero-exit; \
+	runtool pyroma .
+
+.PHONY: review
 review: ## Have coderabbit review the code
 	@if command -v coderabbit >/dev/null 2>&1; then \
 	  output=$$(coderabbit review --prompt-only 2>&1); \

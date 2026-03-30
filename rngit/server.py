@@ -1,7 +1,9 @@
+# pylint: disable=R0801
 import argparse
 import logging
 import os
-import subprocess  # noqa: B404
+import subprocess
+import sys
 import time
 import traceback
 from collections.abc import Sequence
@@ -45,7 +47,7 @@ def on_link_established(link: RNS.Link):
 
 def on_identified(link: RNS.Link, identity: RNS.Identity):
     try:
-        assert link.get_remote_identity() == identity  # nosec B101
+        assert link.get_remote_identity() == identity
         _ = RNS.Packet(link, packets.PACKET_IDENTIFIED.value).send()
         log.debug("IDENTIFIED: %s %s", link, identity)
 
@@ -82,15 +84,15 @@ def write_allowed_error(identity: RNS.Identity | None) -> str | None:
 def request_repo_path(data: bytes) -> tuple[str | None, tuple[str, bytes] | None]:
     global _repo_path  # pylint: disable=W0602 # noqa: F999
     try:
-        assert isinstance(data, bytes), "data must be bytes"  # nosec B101
-        assert _repo_path is not None, "_repo_path not set"  # nosec B101
+        assert isinstance(data, bytes), "data must be bytes"
+        assert _repo_path is not None, "_repo_path not set"
         parts = data.split(b"\n", maxsplit=1)
         path = parts[0].decode()
-        if ".." in path:
+        if ".." in path.split("/"):
             return "Invalid path", None
 
-        base_path = os.path.realpath(_repo_path)
-        repo_path = os.path.realpath(os.path.join(base_path, path))
+        base_path = os.path.abspath(_repo_path)
+        repo_path = os.path.abspath(os.path.join(base_path, path))
         if os.path.commonpath([base_path, repo_path]) != base_path:
             return "Invalid path", None
 
@@ -152,7 +154,7 @@ def on_list_request(
         if err is not None:
             return b"\1" + err.encode()
 
-        assert res is not None  # nosec B101
+        assert res is not None
         repo_path, data = res
 
         log_request(path, repo_path)
@@ -198,7 +200,7 @@ def on_fetch_request(
         if err is not None:
             return b"\1" + err.encode()
 
-        assert res is not None  # nosec B101
+        assert res is not None
         repo_path, data = res
 
         sha, ref = data.decode().split(" ", maxsplit=1)
@@ -240,7 +242,7 @@ def on_push_request(
         if err is not None:
             return b"\1" + err.encode()
 
-        assert res is not None  # nosec B101
+        assert res is not None
         repo_path, data = res
 
         info, data = data.split(b"\n", maxsplit=1)
@@ -306,12 +308,14 @@ def on_delete_request(
         if err is not None:
             return b"\1" + err.encode()
 
-        assert res is not None  # nosec B101
+        assert res is not None
         repo_path, data = res
 
-        ref = data
-        log_request(path, repo_path, data)
+        ref = data.decode()
+        if not ref:
+            return b"\1No ref supplied"
 
+        log_request(path, repo_path, ref)
         proc = subprocess.run(  # nosec B607 B603
             ["git", "update-ref", "-d", ref],
             cwd=repo_path,
@@ -349,13 +353,13 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
     _ = parser.add_argument(
         "-i",
         "--identity",
-        help="Path identity file",
+        help="Path to identity file",
         dest="identity",
     )
     _ = parser.add_argument(
         "-n",
         "--name",
-        help="Name to annouce",
+        help="Name to announce",
         dest="name",
         default=f"rngit {__version__}",
     )
@@ -395,9 +399,16 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
         dest="allow_all_read",
         help="Allow any connection to read the repository",
     )
+    _ = parser.add_argument(
+        "-N",
+        "--nomadnet",
+        action="store_true",
+        help="Enable the nomadnet host",
+        dest="nomadnet",
+    )
     args = parser.parse_args(argv)
 
-    assert isinstance(args.repo, str)  # pyright: ignore[reportAny] # nosec B101
+    assert isinstance(args.repo, str)  # pyright: ignore[reportAny]
     repo_path = os.path.realpath(args.repo)
     if not os.path.exists(repo_path):
         raise FileNotFoundError(repo_path)
@@ -408,28 +419,31 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
     global _repo_path
     _repo_path = repo_path
 
-    assert isinstance(args.config, str | None)  # pyright: ignore[reportAny] # nosec B101
+    assert isinstance(args.config, str | None)  # pyright: ignore[reportAny]
     config_path = args.config
     if config_path is None:
         config_path = os.environ.get("RNS_CONFIG_PATH", None)
 
-    assert isinstance(args.verbose, bool)  # pyright: ignore[reportAny] # nosec B101
+    assert isinstance(args.verbose, bool)  # pyright: ignore[reportAny]
     verbose = args.verbose
 
-    assert isinstance(args.identity, str | None)  # pyright: ignore[reportAny] # nosec B101
+    assert isinstance(args.nomadnet, bool)  # pyright: ignore[reportAny]
+    nomadnet = args.nomadnet
+
+    assert isinstance(args.identity, str | None)  # pyright: ignore[reportAny]
     identity_path = args.identity
 
-    assert isinstance(args.announce_interval, int | None)  # pyright: ignore[reportAny] # nosec B101
+    assert isinstance(args.announce_interval, int | None)  # pyright: ignore[reportAny]
     announce_interval = args.announce_interval
 
-    assert isinstance(args.name, str)  # pyright: ignore[reportAny] # nosec B101
+    assert isinstance(args.name, str)  # pyright: ignore[reportAny]
     name = args.name.encode()
 
-    assert isinstance(args.allow_all_read, bool)  # pyright: ignore[reportAny] # nosec B101
+    assert isinstance(args.allow_all_read, bool)  # pyright: ignore[reportAny]
     allow_all_read = args.allow_all_read
 
-    assert isinstance(args.allow_read, list)  # pyright: ignore[reportAny]# nosec B101
-    assert all(x for x in args.allow_read if isinstance(x, str))  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]# nosec B101
+    assert isinstance(args.allow_read, list)  # pyright: ignore[reportAny]
+    assert all(isinstance(x, str) for x in args.allow_read)  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
     read_list = set(cast(list[str], args.allow_read))
 
     for allow in read_list:
@@ -441,8 +455,8 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
             "--allow-read and --allow-all-read cannot be used at the same time"
         )
 
-    assert isinstance(args.allow_write, list)  # pyright: ignore[reportAny] # nosec B101
-    assert all(x for x in args.allow_write if isinstance(x, str))  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType] # nosec B101
+    assert isinstance(args.allow_write, list)  # pyright: ignore[reportAny]
+    assert all(isinstance(x, str) for x in args.allow_write)  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
     write_list = set(cast(list[str], args.allow_write))
 
     global _write_list
@@ -461,11 +475,11 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
 
     _ = RNS.Reticulum(config_path, RNS.LOG_VERBOSE if verbose else RNS.LOG_WARNING)
 
-    assert RNS.Reticulum.configdir is not None  # pyright: ignore[reportUnknownMemberType] # nosec B101
+    assert RNS.Reticulum.configdir is not None  # pyright: ignore[reportUnknownMemberType]
     if identity_path is None:
         identity_path = os.path.join(RNS.Reticulum.configdir, "identity")  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
 
-    assert identity_path is not None  # nosec B101
+    assert identity_path is not None
     log.info("Identity: %s", identity_path)
     identity: RNS.Identity | None = None
     if os.path.exists(identity_path):
@@ -475,8 +489,8 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
         identity = RNS.Identity(True)
         _ = identity.to_file(identity_path)  # pyright: ignore[reportUnknownMemberType]
 
-    assert identity is not None  # nosec B101
-    assert identity.hexhash is not None  # nosec B101
+    assert identity is not None
+    assert identity.hexhash is not None
 
     server_destination = RNS.Destination(
         identity,
@@ -514,13 +528,41 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
         RNS.Destination.ALLOW_ALL,
     )
     server_destination.set_link_established_callback(on_link_established)  # pyright: ignore[reportUnknownMemberType]
-
     _ = server_destination.announce(name)  # pyright: ignore[reportUnknownMemberType]
+
+    process: subprocess.Popen[bytes] | None = None
+    if nomadnet:
+        process = subprocess.Popen(  # pylint: disable=R1732
+            [
+                sys.executable,
+                "-m",
+                "rngit",
+                "rngit-web",
+                repo_path,
+                f"--identity={identity_path}",
+                *(["--verbose"] if verbose else []),
+                f"--name={name.decode()}",
+                *(
+                    []
+                    if announce_interval is None
+                    else [f"--announce-interval={announce_interval}"]
+                ),
+                *(["--allow-all-read"] if allow_all_read else []),
+                *([] if allow_all_read else [f"--allow-read={x}" for x in read_list]),
+            ],
+        )
+
     if announce_interval is None:
         while True:
+            if process is not None and process.poll() is not None:
+                return process.returncode
+
             time.sleep(10)
 
     while True:
+        if process is not None and process.poll() is not None:
+            return process.returncode
+
         time.sleep(announce_interval)
         log.debug("Sending announce")
         _ = server_destination.announce(name)  # pyright: ignore[reportUnknownMemberType]

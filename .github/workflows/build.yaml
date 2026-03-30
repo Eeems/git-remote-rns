@@ -20,7 +20,10 @@ jobs:
           python-version: 3.11
           cache: "pip"
       - name: Run lint
-        run: make lint
+        run: |
+          set -e
+          pip install wheel packaging
+          make lint
   test:
     name: Test with python ${{ matrix.python }}
     runs-on: ubuntu-latest
@@ -44,6 +47,7 @@ jobs:
           set -e
           pip install wheel packaging
           git config --global user.name "Github Runner"
+          git config --global init.defaultBranch trunk
           make test
   build-wheel:
     name: Build wheel
@@ -95,7 +99,10 @@ jobs:
       - name: Install build tool
         run: pip install build
       - name: Building package
-        run: make sdist
+        run: |
+          set -e
+          pip install wheel packaging
+          make sdist
       - uses: actions/upload-artifact@v6
         with:
           name: pip-sdist

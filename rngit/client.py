@@ -1,7 +1,8 @@
+# pylint: disable=R0801
 import argparse
 import logging
 import os
-import subprocess  # noqa: B404
+import subprocess
 import sys
 import threading
 import traceback
@@ -39,7 +40,7 @@ def log_and_stdout(msg: str):
 
 def on_link_established(link: RNS.Link):
     global _identity  # pylint: disable=W0602 # noqa: F999
-    assert _identity is not None  # nosec B101
+    assert _identity is not None
     log.debug("ESTABLISHED: %s", link)
     link.set_packet_callback(on_packet)  # pyright: ignore[reportUnknownMemberType]
     _ = link.identify(_identity)  # pyright: ignore[reportUnknownMemberType]
@@ -66,7 +67,7 @@ def request(
     link: RNS.Link, path: str, data: bytes = b""
 ) -> tuple[str | None, bytes | None]:
     global _repo_path  # pylint: disable=W0602 # noqa: F999
-    assert _repo_path is not None  # nosec B101
+    assert _repo_path is not None
     event = threading.Event()
     log.debug("REQUEST %s", path)
     receipt = link.request(  # pyright: ignore[reportUnknownMemberType]
@@ -85,7 +86,7 @@ def request(
 
         case RNS.RequestReceipt.READY:
             data = receipt.get_response()  # pyright: ignore[reportUnknownVariableType, reportAssignmentType]
-            assert isinstance(data, bytes)  # nosec B101
+            assert isinstance(data, bytes)
             returncode = int.from_bytes(data[0:1], "big")
             if returncode:
                 return "Remote error: " + data[1:].decode(), None
@@ -145,10 +146,15 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
     _ = parser.add_argument("remote", help="Remote name (ignored)")
     _ = parser.add_argument("url", help="Remote URL (<hash>[/path])")
     _ = parser.add_argument(
-        "--version", action="version", version=f"git-remote-rns {__version__}"
+        "--version",
+        action="version",
+        version=f"git-remote-rns {__version__}",
     )
     _ = parser.add_argument(
-        "-i", "--identity", help="Path identity file", dest="identity"
+        "-i",
+        "--identity",
+        help="Path to identity file",
+        dest="identity",
     )
     _ = parser.add_argument(
         "-v",
@@ -159,14 +165,14 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
     )
     args = parser.parse_args(argv)
 
-    assert isinstance(args.identity, str | None)  # pyright: ignore[reportAny] # nosec B101
+    assert isinstance(args.identity, str | None)  # pyright: ignore[reportAny]
     identity_path = args.identity
 
-    assert isinstance(args.verbose, bool)  # pyright: ignore[reportAny] # nosec B101
+    assert isinstance(args.verbose, bool)  # pyright: ignore[reportAny]
     verbose = args.verbose or bool(os.environ.get("VERBOSE", 0))
     configure_logging("git-remote-rns", logging.DEBUG if verbose else logging.WARNING)
 
-    assert isinstance(args.url, str)  # pyright: ignore[reportAny] # nosec B101
+    assert isinstance(args.url, str)  # pyright: ignore[reportAny]
     url = args.url
     parts = url.split("/", 1)
     destination_hexhash = parts[0]
@@ -182,11 +188,11 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
     config_path = os.environ.get("RNS_CONFIG_PATH", None)
     _ = RNS.Reticulum(config_path, RNS.LOG_VERBOSE if verbose else RNS.LOG_WARNING)
 
-    assert RNS.Reticulum.configdir is not None  # pyright: ignore[reportUnknownMemberType] # nosec B101
+    assert RNS.Reticulum.configdir is not None  # pyright: ignore[reportUnknownMemberType]
     if identity_path is None:
         identity_path = os.path.join(RNS.Reticulum.configdir, "identity")  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
 
-    assert identity_path is not None  # nosec B101
+    assert identity_path is not None
     log.info("Identity: %s", identity_path)
     log.info("Destination: %s", destination_hexhash)
     identity: RNS.Identity | None = None
@@ -230,7 +236,7 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
             log.debug("STDIN %s", line.encode())
 
             parts = cast(list[str], line.split(maxsplit=1))
-            assert isinstance(parts, list)  # nosec B101
+            assert isinstance(parts, list)
             if not parts:
                 log.debug("\\n")
                 if not push_queue and not fetch_queue:
@@ -254,7 +260,7 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
                             log_and_stdout(f"error {remote_ref} {c_style_quote(err)}\n")
 
                         else:
-                            assert not data  # nosec B101
+                            assert not data
                             log_and_stdout(f"ok {remote_ref}\n")
 
                         if data:
@@ -288,7 +294,7 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
                                 )
 
                             else:
-                                assert not data  # nosec B101
+                                assert not data, f"Unexpected data: {data}"
                                 log_and_stdout(f"ok {remote_ref}\n")
 
                 while fetch_queue:
@@ -299,7 +305,7 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
                         _ = sys.stderr.write("\n")
                         return ExitCodes.REMOTE_ERROR.value
 
-                    assert data is not None  # nosec B101
+                    assert data is not None
                     with TemporaryDirectory() as tmpdir:
                         bundle = os.path.join(tmpdir, f"{sha}.bundle")
                         with open(bundle, "wb") as f:
@@ -368,14 +374,14 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
                         _ = sys.stderr.write("\n")
                         return ExitCodes.REMOTE_ERROR.value
 
-                    assert data is not None  # nosec B101
+                    assert data is not None
                     _ = sys.stdout.buffer.write(data)
                     _ = sys.stdout.write("\n")
                     _ = sys.stdout.flush()
 
                 case _:
                     _ = sys.stderr.write(f"Unknown command: {parts[0]}\n")
-                    return ExitCodes.UNKOWN_COMMAND.value
+                    return ExitCodes.UNKNOWN_COMMAND.value
 
         log.debug("End of stdin")
 

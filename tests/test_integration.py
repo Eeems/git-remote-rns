@@ -17,6 +17,10 @@ import pytest
 import RNS
 
 
+class SetupError(RuntimeError):
+    pass
+
+
 def randomword(length: int) -> str:
     letters = string.ascii_lowercase
     return "".join(random.choice(letters) for _ in range(length))
@@ -58,7 +62,7 @@ def shared_rnsd():
     remaining = tries
     while True:
         if rnsd_proc is None:
-            rnsd_proc = subprocess.Popen(
+            rnsd_proc = subprocess.Popen(  # pylint: disable=R1732
                 [
                     sys.executable,
                     "-m",
@@ -75,7 +79,7 @@ def shared_rnsd():
             stdout = (
                 rnsd_proc.stdout.read().decode() if rnsd_proc.stdout is not None else ""
             )
-            raise Exception(
+            raise SetupError(
                 f"RNS shared instance exited early: {rnsd_proc.returncode}"
                 + f"\n  stdout: {stdout}"
             )
@@ -93,6 +97,7 @@ def shared_rnsd():
             stdin=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
+            check=False,
         )
         if not proc.returncode:
             break
@@ -117,7 +122,7 @@ def shared_rnsd():
         stdout = (
             rnsd_proc.stdout.read().decode() if rnsd_proc.stdout is not None else ""
         )
-        raise Exception(
+        raise SetupError(
             f"RNS shared instance failed to start in {tries} tries..."
             + f"\n  stdout: {stdout}"
             + f"\n  rnstatus: {proc.returncode} {proc.stdout or ''}"
@@ -178,7 +183,7 @@ class IntegrationStack:
                 for identity in allow_write:
                     args.extend(["--allow-write", identity])
 
-        self.server_proc = subprocess.Popen(
+        self.server_proc = subprocess.Popen(  # pylint: disable=R1732
             args,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -204,12 +209,12 @@ class IntegrationStack:
                     break
 
                 if "error" in line.lower():
-                    raise RuntimeError(f"Server error: {line}")
+                    raise SetupError(f"Server error: {line}")
             else:
                 break
 
         if self.server_proc.poll() is not None and dest_hash is None:
-            raise RuntimeError(
+            raise SetupError(
                 f"rngit exited early with code {self.server_proc.returncode}"
             )
 
@@ -225,12 +230,13 @@ class IntegrationStack:
                 str(self.rns_config),
                 "-w1",
                 dest_hash,
-            ]
+            ],
+            check=False,
         ).returncode:
             if self.server_proc.returncode is not None:
-                raise Exception(
+                raise SetupError(
                     f"Server exited early: {self.server_proc.returncode}\n"
-                    + f"{self.server_proc.stdout}"
+                    + f"{self.server_proc.stdout.read() if self.server_proc.stdout else ''}"
                 )
 
         def fn(proc: subprocess.Popen[str]):
@@ -277,6 +283,7 @@ class IntegrationStack:
             capture_output=True,
             text=True,
             timeout=timeout,
+            check=False,
         )
         print(f"CLIENT STDOUT: {result.stdout}")
         print(f"CLIENT STDERR: {result.stderr}")
@@ -411,7 +418,7 @@ class IntegrationStack:
 class TestPublicAccess:
     def test_capabilities(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
-            raise Exception("RNS not available")
+            raise SetupError("RNS not available")
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
@@ -431,7 +438,7 @@ class TestPublicAccess:
 
     def test_list(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
-            raise Exception("RNS not available")
+            raise SetupError("RNS not available")
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
@@ -452,7 +459,7 @@ class TestPublicAccess:
 
     def test_fetch_single_branch(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
-            raise Exception("RNS not available")
+            raise SetupError("RNS not available")
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
@@ -477,7 +484,7 @@ class TestPublicAccess:
 
     def test_fetch_all_refs(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
-            raise Exception("RNS not available")
+            raise SetupError("RNS not available")
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
@@ -501,7 +508,7 @@ class TestPublicAccess:
 class TestAllowRead:
     def test_list_with_allow_read(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
-            raise Exception("RNS not available")
+            raise SetupError("RNS not available")
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
@@ -523,7 +530,7 @@ class TestAllowRead:
 
     def test_fetch_with_allow_read(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
-            raise Exception("RNS not available")
+            raise SetupError("RNS not available")
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
@@ -543,7 +550,7 @@ class TestAllowRead:
 
     def test_list_for_push_fails(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
-            raise Exception("RNS not available")
+            raise SetupError("RNS not available")
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
@@ -564,7 +571,7 @@ class TestAllowRead:
 
     def test_wrong_identity_denied(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
-            raise Exception("RNS not available")
+            raise SetupError("RNS not available")
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
@@ -598,7 +605,7 @@ class TestAllowRead:
 class TestAllowWrite:
     def test_list_with_allow_write(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
-            raise Exception("RNS not available")
+            raise SetupError("RNS not available")
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
@@ -619,7 +626,7 @@ class TestAllowWrite:
 
     def test_fetch_with_allow_write(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
-            raise Exception("RNS not available")
+            raise SetupError("RNS not available")
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
@@ -639,7 +646,7 @@ class TestAllowWrite:
 
     def test_list_for_push(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
-            raise Exception("RNS not available")
+            raise SetupError("RNS not available")
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
@@ -660,7 +667,7 @@ class TestAllowWrite:
 
     def test_push_new_branch(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
-            raise Exception("RNS not available")
+            raise SetupError("RNS not available")
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
@@ -692,7 +699,7 @@ class TestAllowWrite:
 
     def test_push_update_branch(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
-            raise Exception("RNS not available")
+            raise SetupError("RNS not available")
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
@@ -714,7 +721,7 @@ class TestAllowWrite:
 
     def test_push_force(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
-            raise Exception("RNS not available")
+            raise SetupError("RNS not available")
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
@@ -747,7 +754,7 @@ class TestAllowWrite:
 
     def test_delete_branch(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
-            raise Exception("RNS not available")
+            raise SetupError("RNS not available")
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
@@ -781,7 +788,7 @@ class TestAllowWrite:
 
     def test_clone_and_push(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
-            raise Exception("RNS not available")
+            raise SetupError("RNS not available")
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
@@ -806,7 +813,7 @@ class TestAllowWrite:
                 print(f"\nClone stdout: {clone_result.stdout.decode()}")
 
             if not (client_repo / ".git").exists():
-                raise Exception(
+                raise SetupError(
                     f"Clone failed - .git not created: {clone_result.stderr}"
                 )
 
@@ -872,7 +879,7 @@ class TestAllowWrite:
 
     def test_wrong_identity_denied(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
-            raise Exception("RNS not available")
+            raise SetupError("RNS not available")
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
@@ -907,7 +914,7 @@ class TestAllowWrite:
 class TestNoAuth:
     def test_list_no_auth_fails(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
-            raise Exception("RNS not available")
+            raise SetupError("RNS not available")
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
@@ -926,7 +933,7 @@ class TestNoAuth:
 
     def test_list_for_push_no_auth_fails(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
-            raise Exception("RNS not available")
+            raise SetupError("RNS not available")
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
@@ -945,7 +952,7 @@ class TestNoAuth:
 
     def test_push_no_auth_fails(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
-            raise Exception("RNS not available")
+            raise SetupError("RNS not available")
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
@@ -964,7 +971,7 @@ class TestNoAuth:
 
     def test_fetch_no_auth_fails(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
-            raise Exception("RNS not available")
+            raise SetupError("RNS not available")
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()

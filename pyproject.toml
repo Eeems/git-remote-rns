@@ -1,11 +1,10 @@
 [project]
 name = "git-remote-rns"
-version = "0.1.0"
+version = "0.2.0"
 description = "Git remote helper for syncing repositories over Reticulum"
 requires-python = ">=3.11"
 license = "MIT"
-authors = [{name = "Eeems"}]
-dependencies = ["rns>=1.1.4", "lxmf>=0.9.4"]
+authors = [{name = "Eeems", email="eeems@eeems.email"}]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: Console",
@@ -20,6 +19,18 @@ classifiers = [
     "Topic :: Software Development :: Version Control :: Git",
 ]
 dynamic = ["readme"]
+keywords = [
+    "git",
+    "rns",
+    "reticulum",
+    "remote",
+    "helper",
+]
+dependencies = [
+    "rns>=1.1.4",
+    "lxmf>=0.9.4",
+    "overrides==7.7.0; python_version<\"3.12\""
+]
 
 [project.urls]
 Homepage = "https://github.com/Eeems/git-remote-rns"
@@ -27,11 +38,27 @@ Repository = "https://github.com/Eeems/git-remote-rns.git"
 Issues = "https://github.com/Eeems/git-remote-rns/issues"
 
 [project.optional-dependencies]
-dev = ["pytest>=7.0", "prospector[with_everything]", 'basedpyright']
+test = [
+    "pytest",
+]
+dev = [
+    'basedpyright',
+    "bandit",
+    "dodgy",
+    "pylint",
+    "pyroma",
+    "ruff",
+    "vulture",
+]
+web = [
+    "humanize>=4.15.0",
+    "marko>=2.2.2",
+]
 
 [project.scripts]
 git-remote-rns = "rngit.__main__:client"
 rngit = "rngit.__main__:server"
+rngit-web = "rngit.__main__:web"
 
 [build-system]
 requires = ["setuptools>=70.1", "nuitka>=4.0.6"]
@@ -44,23 +71,66 @@ readme = {file= ["README.md"], content-type = "text/markdown"}
 packages = ["rngit"]
 
 [tool.ruff]
-exclude = [".venv", "typings", "build"]
+exclude = [".venv", "build", "**/__whitelist.py"]
 
 [tool.pyright]
-exclude = [".venv/**", "typings/**", "build/**"]
+exclude = [".venv", "build", "**/__whitelist.py"]
 reportMissingTypeStubs = false
+
+[tool.pylint]
+ignore-paths = [
+    ".venv/",
+    "build/",
+    "rngit/__whitelist.py",
+    "tests/__whitelist.py",
+    ".repos/"
+]
 
 [tool.pylint."messages control"]
 disable = [
-	"line-too-long",
-	"invalid-name",
-	"global-statement",
-	"broad-exception-caught",
-	"too-many-statements",
-	"too-many-return-statements",
-	"too-many-branches",
-	"too-many-locals"
+    "broad-exception-caught",
+    "global-statement",
+    "invalid-name",
+    "line-too-long",
+    "missing-class-docstring",
+    "missing-function-docstring",
+    "missing-module-docstring",
+    "too-few-public-methods",
+    "too-many-arguments",
+    "too-many-branches",
+    "too-many-instance-attributes",
+    "too-many-locals",
+    "too-many-positional-arguments",
+    "too-many-public-methods",
+    "too-many-return-statements",
+    "too-many-statements",
+]
+
+[tool.vulture]
+ignore_names = ["__*", "_*", "_"]
+ignore_decorators = [
+    "@app.request",
+    "@app.page",
+    "@app.file",
+    '@pytest.fixture',
+]
+exclude = [
+    ".venv/",
+    "build/",
+    ".repos/",
 ]
 
 [tool.bandit]
-exclude_dirs = [".venv", "typings", "build"]
+exclude_dirs = [
+    ".venv/",
+    "build/",
+    "**/__whitelist.py",
+    ".*/"
+]
+skips = [
+    'B101',
+    'B404',
+    "B603",
+    "B607",
+    "B311",
+]
