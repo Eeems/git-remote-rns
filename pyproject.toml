@@ -42,7 +42,7 @@ test = [
     "pytest",
 ]
 fuzz = [
-    "atheris; platform_machine == 'x86_64'",
+    "atheris",
 ]
 
 dev = [
