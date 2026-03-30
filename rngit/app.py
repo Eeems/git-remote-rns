@@ -16,6 +16,7 @@ from subprocess import CalledProcessError
 from typing import (
     Any,
     Callable,
+    Literal,
     NoReturn,
     cast,
 )
@@ -164,6 +165,8 @@ class Application:
             **{k: Template(v) for k, v in templates.items()},
         }
         self.args: Namespace | None = None
+        self.cache: dict[str, tuple[float, bytes | None]] = {}
+        self.locks: defaultdict[str, threading.Lock] = defaultdict(threading.Lock)
 
     @property
     def destination(self) -> RNS.Destination:
@@ -420,11 +423,150 @@ class Application:
             compress=False,
         )
 
-    def request(  # noqa: MC0001
+    def purge_cache(self) -> None:
+        for idx in list(self.cache.keys()):
+            with self.locks[idx]:
+                if idx not in self.cache:
+                    del self.locks[idx]
+                    continue
+
+                _ttl, _ = self.cache[idx]
+                if time.time() <= _ttl:
+                    continue
+
+                del self.cache[idx]
+                del self.locks[idx]
+                log.debug("Evicted stale cache: %s", idx)
+
+    def is_cached(self, idx: str) -> tuple[bool, bytes | None]:
+        res: bytes | None = None
+        if idx in self.cache:
+            _ttl, res = self.cache[idx]
+            if time.time() <= _ttl:
+                return True, res
+
+            del self.cache[idx]
+            del self.locks[idx]
+            log.debug("Evicted stale cache: %s", idx)
+
+        return False, None
+
+    def push_cache(self, idx: str, ttl: float, res: bytes | None) -> None:
+        log.debug("Caching %s with ttl of %d", idx, ttl)
+        self.cache[idx] = (time.time() + ttl, res)
+
+    def has_permission(
+        self,
+        permissions: list[str] | None,
+        identity: RNS.Identity | None,
+    ) -> tuple[bool, str | None]:
+        if not permissions:
+            return True, None
+
+        for permission in permissions:
+            if SpecialPermissions.ALL.value in self.permissions[permission]:
+                continue
+
+            if SpecialPermissions.NONE.value in self.permissions[permission]:
+                return False, "not-allowed"
+
+            if identity is None:
+                return False, "not-identified"
+
+            if permission == "identified":
+                continue
+
+            assert identity.hexhash is not None
+            hexhash = identity.hexhash
+            if hexhash not in self.permissions[permission]:
+                return False, "not-allowed"
+
+        return True, None
+
+    def _request_thread(
+        self,
+        fn: RequestHandler,
+        request: Request,
+        response: list[bytes | FileResponse | Exception | None],
+        **kwargs,  # pyright: ignore[reportUnknownParameterType, reportMissingParameterType]
+    ) -> None:
+        try:
+            response.append(fn(request, **kwargs))
+
+        except Exception as e:
+            response.append(e)
+
+        except ThreadTimeout:
+            log.error("Request %s thread interrupted", request.request_hex)
+
+    def _kill_thread(self, thread: threading.Thread, request: Request) -> None:
+        thread_id = ctypes.c_long(thread.ident)  # pyright: ignore[reportArgumentType]
+        returncode = ctypes.pythonapi.PyThreadState_SetAsyncExc(  # pyright: ignore[reportAny]
+            thread_id,
+            ctypes.py_object(ThreadTimeout),
+        )
+        if returncode < 1:
+            log.error(
+                "Request %s thread not found when trying to inject exception",
+                request.request_hex,
+            )
+
+        elif returncode > 1:
+            ctypes.pythonapi.PyThreadState_SetAsyncExc(thread_id, 0)
+
+        thread.join(5)
+        if thread.is_alive():
+            log.error(
+                "Request %s thread still not stopped, there may now be zombie threads",
+                request.request_hex,
+            )
+
+    def _get_parameters(self, fn: RequestHandler) -> list[inspect.Parameter]:
+        signature = inspect.signature(fn)
+        if len(signature.parameters) == 0:
+            raise BadRequestMethod(
+                "request methods must accept a Request as the first parameter: None"
+            )
+
+        parameter_iter = iter(signature.parameters.values())
+        annotation: type = next(parameter_iter).annotation  # pyright: ignore[reportAny]
+        if annotation != Request:
+            raise BadRequestMethod(
+                f"request methods must accept a Request as the first parameter: {annotation}"
+            )
+
+        return list(parameter_iter)
+
+    def _run_handler(
+        self,
+        fn: RequestHandler,
+        request: Request,
+        params: dict[str, Any],  # pyright: ignore[reportExplicitAny]
+        timeout: float | None,
+    ) -> bytes | FileResponse | None | Literal[False]:
+        response: list[bytes | FileResponse | Exception | None] = []
+        thread = threading.Thread(
+            target=self._request_thread,  # pyright: ignore[reportUnknownArgumentType, reportUnknownMemberType]
+            args=(fn, request, response),
+            kwargs=params,
+        )
+        thread.start()
+        thread.join(timeout)
+        if timeout is not None and thread.is_alive():
+            self._kill_thread(thread, request)
+            return False
+
+        res = response[0]
+        if isinstance(res, Exception):
+            raise res
+
+        return res
+
+    def request(
         self,
         *paths: str,
         permissions: list[str] | None = None,
-        ttl: float | bool = False,
+        ttl: float | Literal[False] = False,
         timeout: float | None = 10.0,
         compress: bool = True,
     ) -> Callable[[RequestHandler], None]:
@@ -433,22 +575,7 @@ class Application:
             permissions = []
 
         def decorator(fn: RequestHandler) -> None:
-            signature = inspect.signature(fn)
-            if len(signature.parameters) == 0:
-                raise BadRequestMethod(
-                    "request methods must accept a Request as the first parameter: None"
-                )
-
-            parameter_iter = iter(signature.parameters.values())
-            annotation: type = next(parameter_iter).annotation  # pyright: ignore[reportAny]
-            if annotation != Request:
-                raise BadRequestMethod(
-                    f"request methods must accept a Request as the first parameter: {annotation}"
-                )
-
-            parameters: list[inspect.Parameter] = list(parameter_iter)
-            cache: dict[str, tuple[float, bytes | None]] = {}
-            locks: defaultdict[str, threading.Lock] = defaultdict(threading.Lock)
+            parameters = self._get_parameters(fn)
 
             def handler(
                 path: str,
@@ -459,57 +586,18 @@ class Application:
             ) -> bytes | FileResponse | None:
                 request_hex = hex(int.from_bytes(request_id, "big"))[2:]
                 self._log_request_state("REQUEST", request_hex, remote_identity, path)
-                if permissions:
-                    for permission in permissions:
-                        if SpecialPermissions.ALL.value in self.permissions[permission]:
-                            continue
+                permission, reason = self.has_permission(permissions, remote_identity)
+                if not permission:
+                    self._log_request_state(
+                        "DENIED ",
+                        request_hex,
+                        remote_identity,
+                        path,
+                    )
+                    assert reason is not None
+                    return self.template(reason)()
 
-                        if (
-                            SpecialPermissions.NONE.value
-                            in self.permissions[permission]
-                        ):
-                            self._log_request_state(
-                                "DENIED ",
-                                request_hex,
-                                remote_identity,
-                                path,
-                            )
-                            return self.template("not-allowed")()
-
-                        if remote_identity is None:
-                            self._log_request_state(
-                                "DENIED ",
-                                request_hex,
-                                remote_identity,
-                                path,
-                            )
-                            return self.template("not-identified")()
-
-                        if permission == "identified":
-                            continue
-
-                        assert remote_identity.hexhash is not None
-                        hexhash = remote_identity.hexhash
-                        if hexhash not in self.permissions[permission]:
-                            self._log_request_state(
-                                "DENIED ",
-                                request_hex,
-                                remote_identity,
-                                path,
-                            )
-                            return self.template("not-allowed")()
-
-                for idx in list(cache.keys()):
-                    with locks[idx]:
-                        _ttl, res = cache[idx]
-                        if time.time() <= _ttl:
-                            continue
-
-                        del cache[idx]
-                        del locks[idx]
-                        log.debug("Evicted stale cache: %s", idx)
-
-                log.debug("Cache count: %d", len(cache))
+                self.purge_cache()
                 request = Request(
                     path,
                     data,
@@ -522,11 +610,11 @@ class Application:
                     idx = sha256(
                         path.encode() + json.dumps(params, sort_keys=True).encode()
                     ).hexdigest()
-                    with locks[idx]:
-                        res: Exception | bytes | FileResponse | None = None
-                        if ttl is not False and idx in cache:
-                            _ttl, res = cache[idx]
-                            if time.time() <= _ttl:
+                    with self.locks[idx]:
+                        res: bytes | FileResponse | None | bool = None
+                        if ttl is not False:
+                            cached, res = self.is_cached(idx)
+                            if cached:
                                 self._log_request_state(
                                     "CACHED ",
                                     request_hex,
@@ -535,73 +623,15 @@ class Application:
                                 )
                                 return res
 
-                            self._log_request_state(
-                                "STALE  ",
-                                request_hex,
-                                remote_identity,
-                                path,
-                            )
-                            del cache[idx]
-                            del locks[idx]
-                            log.debug("Evicted stale cache: %s", idx)
-
-                        def target(
-                            fn: RequestHandler,
-                            request: Request,
-                            **kwargs,  # pyright: ignore[reportUnknownParameterType, reportMissingParameterType]
-                        ):
-                            nonlocal res
-                            try:
-                                res = fn(request, **kwargs)
-
-                            except Exception as e:
-                                res = e
-
-                            except ThreadTimeout:
-                                log.error("Request %s thread interrupted", request_hex)
-
-                        thread = threading.Thread(
-                            target=target,  # pyright: ignore[reportUnknownArgumentType]
-                            args=(
-                                fn,
-                                request,
-                            ),
-                            kwargs=params,
-                        )
-                        thread.start()
-                        thread.join(timeout)
-                        if timeout is not None and thread.is_alive():
+                        res = self._run_handler(fn, request, params, timeout)
+                        if res is False:
                             self._log_request_state(
                                 "TIMEOUT",
                                 request_hex,
                                 remote_identity,
                                 path,
                             )
-                            thread_id = ctypes.c_long(thread.ident)  # pyright: ignore[reportArgumentType]
-                            returncode = ctypes.pythonapi.PyThreadState_SetAsyncExc(  # pyright: ignore[reportAny]
-                                thread_id,
-                                ctypes.py_object(ThreadTimeout),
-                            )
-                            if returncode < 1:
-                                log.error(
-                                    "Request %s thread not found when trying to inject exception",
-                                    request_hex,
-                                )
-
-                            elif returncode > 1:
-                                ctypes.pythonapi.PyThreadState_SetAsyncExc(thread_id, 0)
-
-                            thread.join(5)
-                            if thread.is_alive():
-                                log.error(
-                                    "Request %s thread still not stopped, there may now be zombie threads",
-                                    request_hex,
-                                )
-
                             return self.template("timeout")()
-
-                        if isinstance(res, Exception):
-                            raise res
 
                         self._log_request_state(
                             "HANDLED",
@@ -609,9 +639,8 @@ class Application:
                             remote_identity,
                             path,
                         )
-                        if isinstance(res, bytes | None) and ttl is not False:  # pyright: ignore[reportUnnecessaryIsInstance]
-                            log.debug("Caching %s with ttl of %d", idx, ttl)
-                            cache[idx] = (time.time() + ttl, res)
+                        if isinstance(res, bytes | None) and ttl is not False:
+                            self.push_cache(idx, ttl, res)
 
                         return res
 
