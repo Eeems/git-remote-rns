@@ -309,10 +309,12 @@ def on_delete_request(
             return b"\1" + err.encode()
 
         assert res is not None
-        repo_path, data = res
+        repo_path, ref = res
 
-        ref = data
-        log_request(path, repo_path, data)
+        if not ref:
+            return b"\1No ref supplied"
+
+        log_request(path, repo_path, ref)
 
         proc = subprocess.run(  # nosec B607 B603
             ["git", "update-ref", "-d", ref],
