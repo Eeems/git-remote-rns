@@ -8,7 +8,7 @@ OBJ += pyproject.toml
 OBJ += README.md
 
 ifndef FUZZ_RUNS
-FUZZ_RUNS := 1000
+FUZZ_RUNS := 5000
 endif
 
 ifndef SKIP_TESTS
