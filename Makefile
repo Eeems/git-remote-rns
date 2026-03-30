@@ -220,7 +220,7 @@ whitelist: requirements-dev ## Generate lint whitelists
  	python -m vulture --make-whitelist tests/ >tests/__whitelist.py || true
 
 
-lint: requirements-dev ## Lint the codebase
+lint: requirements-dev requirements-web requirements-test ## Lint the codebase
 	@set -e;\
 	. ${VENV_BIN_ACTIVATE}; \
 	runtool() { \

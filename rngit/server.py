@@ -530,7 +530,7 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
 
     process: subprocess.Popen[bytes] | None = None
     if nomadnet:
-        process = subprocess.Popen(
+        process = subprocess.Popen(  # pylint: disable=R1732
             [
                 sys.executable,
                 "-m",

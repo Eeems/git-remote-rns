@@ -1,6 +1,5 @@
 # pylint: disable=R0801
 import argparse
-import io
 import logging
 import math
 import os
@@ -51,7 +50,13 @@ def repo_dir(repo: str) -> str:
 
 def git(repo: str, *args: str, timeout: float | None = 10.0) -> bytes:
     cmd = ["git", *args]
-    proc = subprocess.run(cmd, cwd=repo_dir(repo), capture_output=True, timeout=timeout)
+    proc = subprocess.run(
+        cmd,
+        cwd=repo_dir(repo),
+        capture_output=True,
+        timeout=timeout,
+        check=False,
+    )
     if proc.returncode:
         raise subprocess.CalledProcessError(
             proc.returncode,
@@ -108,8 +113,8 @@ def tree(repo: str, ref: str) -> Generator[tuple[str, str, str, str], None, None
             if len(parts) != 4:
                 raise RuntimeError("Data returned by git doesn't match expcted format")
 
-            perms, type, sha, name = parts
-            yield perms, type, sha, name.lstrip()
+            perms, ref_type, sha, name = parts
+            yield perms, ref_type, sha, name.lstrip()
 
     except subprocess.CalledProcessError as e:
         if e.stdout or e.stderr:  # pyright: ignore[reportAny]
@@ -117,8 +122,8 @@ def tree(repo: str, ref: str) -> Generator[tuple[str, str, str, str], None, None
 
 
 def readme(repo: str, ref: str = "HEAD") -> bytes:
-    for _, type, sha, name in tree(repo, ref):
-        if type != "blob":
+    for _, ref_type, sha, name in tree(repo, ref):
+        if ref_type != "blob":
             continue
 
         lowername = name.lower()
@@ -161,7 +166,7 @@ def commits(
         if len(parts) != 7:
             raise RuntimeError("Data returned doesn't match expected format")
 
-        short_sha, sha, author_name, author_email, date, refs, subject = parts
+        short_sha, sha, author_name, author_email, date, refs, subject = parts  # pylint: disable=W0621
 
         yield (
             (short_sha, sha),
@@ -327,12 +332,12 @@ def _(  # pylint: disable=E0102 # noqa: F811
 ) -> bytes | None:
     links: list[bytes] = []
     effective_ref = ref or "HEAD"
-    for perms, type, _, name in tree(repo, f"{effective_ref}:{path or ''}"):
+    for perms, ref_type, _, name in tree(repo, f"{effective_ref}:{path or ''}"):
         params = {"repo": repo, "path": os.path.join(path or "", name)}
         if ref is not None:
             params["ref"] = ref
 
-        match type:
+        match ref_type:
             case "blob":
                 page = "blob"
 
@@ -340,7 +345,7 @@ def _(  # pylint: disable=E0102 # noqa: F811
                 page = "tree"
 
             case _:
-                raise RuntimeError(f"Unknown tree type: {type}")
+                raise RuntimeError(f"Unknown tree ref_type: {ref_type}")
 
         links.append(f"{perms} ".encode() + micron.page_link(page, name, params))
 
@@ -406,7 +411,7 @@ def _(  # pylint: disable=E0102 # noqa: F811
 
     content: list[bytes] = []
     ref = branch or tag or "HEAD"
-    for (short_sha, sha), (author, email), date, refs, subject in commits(
+    for (short_sha, sha), (author, _), date, _, subject in commits(
         repo,
         ref,
         count=100,

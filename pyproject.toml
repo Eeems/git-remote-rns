@@ -83,25 +83,27 @@ ignore-paths = [
     "build/",
     "rngit/__whitelist.py",
     "tests/__whitelist.py",
-    ".web/"
+    ".repos/"
 ]
 
 [tool.pylint."messages control"]
 disable = [
-    "line-too-long",
-    "invalid-name",
-    "global-statement",
     "broad-exception-caught",
-    "too-many-statements",
-    "too-many-return-statements",
-    "too-many-branches",
-    "too-many-locals",
-    "too-many-arguments",
-    "too-many-positional-arguments",
-    "too-many-instance-attributes",
-    "missing-module-docstring",
+    "global-statement",
+    "invalid-name",
+    "line-too-long",
     "missing-class-docstring",
-    "missing-function-docstring"
+    "missing-function-docstring",
+    "missing-module-docstring",
+    "too-few-public-methods",
+    "too-many-arguments",
+    "too-many-branches",
+    "too-many-instance-attributes",
+    "too-many-locals",
+    "too-many-positional-arguments",
+    "too-many-public-methods",
+    "too-many-return-statements",
+    "too-many-statements",
 ]
 
 [tool.vulture]
@@ -115,7 +117,7 @@ ignore_decorators = [
 exclude = [
     ".venv/",
     "build/",
-    ".web/",
+    ".repos/",
 ]
 
 [tool.bandit]
