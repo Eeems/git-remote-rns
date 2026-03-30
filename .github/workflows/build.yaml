@@ -78,7 +78,7 @@ jobs:
 
   build-wheel:
     name: Build wheel
-    needs: [lint, test, fuzz]
+    needs: [lint, test]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -134,9 +134,10 @@ jobs:
   publish:
     name: Publish to PyPi
     if: github.repository == 'Eeems/git-remote-rns' && github.event_name == 'release' && startsWith(github.ref, 'refs/tags')
-    needs:
+    needs: &release-needs
       - build-sdist
       - build-wheel
+      - fuzz
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -159,9 +160,7 @@ jobs:
   release:
     name: Add ${{ matrix.artifact }} to release
     if: github.repository == 'Eeems/git-remote-rns' && github.event_name == 'release' && startsWith(github.ref, 'refs/tags')
-    needs:
-      - build-wheel
-      - build-sdist
+    needs: *release-needs
     runs-on: ubuntu-latest
     permissions:
       contents: write
