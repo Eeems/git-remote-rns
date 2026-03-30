@@ -80,7 +80,7 @@ requirements-dev: $(VENV_BIN_ACTIVATE) pyproject.toml ## Install dev requirement
 	  ".[dev]"
 
 .PHONY: requirements-test
-requirements-test: $(VENV_BIN_ACTIVATE) pyproject.toml ## Install test requirements
+requirements-test: requirements-web ## Install test requirements
 	@. ${VENV_BIN_ACTIVATE}; \
 	python -m pip install \
 	  --quiet \
