@@ -48,3 +48,11 @@ git clone rns::<hexhash>/my_repo
 ```
 
 The repositories can be bare repositories, or a worktree with the `.git` folder inside it. I don't recommend hosting the worktree versions though, as you wont be able to push updates to the checked out branch.
+
+If you want to browse the contents of the repositories in nomadnet, you can just pass the `--nomadnet` flag to rngit.
+
+```shell
+rngit --nomadnet --allow-all-read /path/to/repositories
+```
+
+This assumes that the directory has multiple repositories in it, and without `--allow-all-read` it will expect all users to identify, and to be on the read/write list to be able to browse the repositories.
