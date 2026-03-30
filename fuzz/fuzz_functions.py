@@ -1,3 +1,4 @@
+import os
 import sys
 import tempfile
 
@@ -22,32 +23,32 @@ with atheris.instrument_imports():
         is_valid_hexhash,
     )
 
+corpus = os.path.join("corpus", os.path.splitext(os.path.basename(__file__))[0])
 with tempfile.TemporaryDirectory(prefix="rngit_fuzz_") as t:
 
     def TestOneInput(data: bytes) -> None:
-        try:
-            text = data.decode("utf-8")
-        except UnicodeDecodeError:
-            return
-
-        if not text:
-            return
+        text = atheris.FuzzedDataProvider(data).ConsumeUnicode(sys.maxsize)
+        text_no_surrogates = atheris.FuzzedDataProvider(
+            data
+        ).ConsumeUnicodeNoSurrogates(sys.maxsize)
 
         _ = c_style_quote(text)
-        _ = paramescape(text)
         _ = paramunescape(text)
-        _ = escape(text)
-        _ = escape_inline(text)
-        _ = convert_markdown(text)
-        _ = link(text)
-        _ = page_link(text)
-        _ = file_link(text)
         _ = is_valid_hexhash(text)
+        _ = link(text_no_surrogates)
+        _ = page_link(text_no_surrogates)
+        _ = file_link(text_no_surrogates)
+        _ = paramescape(text_no_surrogates)
+        _ = escape(text_no_surrogates)
+        _ = escape_inline(text_no_surrogates)
+        _ = convert_markdown(text_no_surrogates)
 
-        if "\x00" in text or text in (".", "..", ".git"):
+        if "\x00" in text or text in (".", "..", ".git", ""):
             return
 
         _ = _normalize_repo(text, t)
 
-    _ = atheris.Setup(sys.argv, TestOneInput)
+    arg0 = sys.argv[0]
+    argv = sys.argv[1:]
+    _ = atheris.Setup([arg0, corpus, *argv], TestOneInput)
     atheris.Fuzz()

@@ -87,7 +87,7 @@ ignore-paths = [
     "build/",
     "rngit/__whitelist.py",
     "tests/__whitelist.py",
-    ".repos/"
+    ".repos/",
 ]
 
 [tool.pylint."messages control"]

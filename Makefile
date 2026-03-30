@@ -110,8 +110,8 @@ test: requirements-test ## Run tests
 fuzz: requirements-fuzz ## Run fuzz tests
 	@. ${VENV_BIN_ACTIVATE}; \
 	cd fuzz; \
-	python test_fuzz.py \
-	  corpus \
+	find . -type f -name '*.py' | xargs -I {} \
+	python {} \
 	  -rss_limit_mb=2048 \
 	  -timeout=$(FUZZ_TIMEOUT) \
 	  -timeout_exitcode=0
