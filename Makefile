@@ -228,8 +228,7 @@ $1: requirements-fuzz
 	cd fuzz; \
 	python $2 \
 	  -rss_limit_mb=2048 \
-	  -timeout=$$(FUZZ_TIMEOUT) \
-	  -timeout_exitcode=0
+	  -max_total_time=$$(FUZZ_TIMEOUT)
 endef
 $(foreach T,\
 	$(FUZZERS),\
