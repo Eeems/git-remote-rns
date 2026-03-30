@@ -75,7 +75,7 @@ def find_repos(root_dir: str) -> list[str]:
                 "-exec",
                 "bash",
                 "-c",
-                "cd $0; realpath $(git rev-parse --git-dir)",
+                'cd "$0"; realpath $(git rev-parse --git-dir)',
                 "{}",
                 ";",
             ],

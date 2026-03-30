@@ -499,6 +499,17 @@ class Application:
                             )
                             return self.template("not-allowed")()
 
+                for idx in list(cache.keys()):
+                    with locks[idx]:
+                        _ttl, res = cache[idx]
+                        if time.time() <= _ttl:
+                            continue
+
+                        del cache[idx]
+                        del locks[idx]
+                        log.debug("Evicted stale cache: %s", idx)
+
+                log.debug("Cache count: %d", len(cache))
                 request = Request(
                     path,
                     data,
@@ -531,6 +542,8 @@ class Application:
                                 path,
                             )
                             del cache[idx]
+                            del locks[idx]
+                            log.debug("Evicted stale cache: %s", idx)
 
                         def target(
                             fn: RequestHandler,
@@ -597,6 +610,7 @@ class Application:
                             path,
                         )
                         if isinstance(res, bytes | None) and ttl is not False:  # pyright: ignore[reportUnnecessaryIsInstance]
+                            log.debug("Caching %s with ttl of %d", idx, ttl)
                             cache[idx] = (time.time() + ttl, res)
 
                         return res
