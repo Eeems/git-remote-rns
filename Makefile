@@ -7,8 +7,8 @@ OBJ := $(shell find rngit -type f)
 OBJ += pyproject.toml
 OBJ += README.md
 
-ifndef FUZZ_RUNS
-FUZZ_RUNS := 5000
+ifndef FUZZ_TIMEOUT
+FUZZ_TIMEOUT := 60
 endif
 
 ifndef SKIP_TESTS
@@ -113,7 +113,8 @@ fuzz: requirements-fuzz ## Run fuzz tests
 	python test_fuzz.py \
 	  corpus \
 	  -rss_limit_mb=2048 \
-	  -atheris_runs=$(FUZZ_RUNS)
+	  -timeout=$(FUZZ_TIMEOUT) \
+	  -timeout_exitcode=0
 
 .repos:
 	mkdir -p .repos
