@@ -534,9 +534,15 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
     if nomadnet:
         process = subprocess.Popen(  # pylint: disable=R1732
             [
-                sys.executable,
-                "-m",
-                "rngit",
+                *(
+                    []
+                    if "__compiled__" in globals()
+                    else [
+                        sys.executable,
+                        "-m",
+                        "rngit",
+                    ]
+                ),
                 "rngit-web",
                 repo_path,
                 f"--identity={identity_path}",
