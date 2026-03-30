@@ -52,6 +52,7 @@ with tempfile.TemporaryDirectory(prefix="rngit_fuzz_") as t:
         _ = _normalize_repo(text, t)
 
     argv = [sys.argv[0], corpus, *sys.argv[1:]]
+    print("argv: ", end="")
     print(argv)
     _ = atheris.Setup(argv, TestOneInput)
     atheris.Fuzz()

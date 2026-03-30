@@ -95,7 +95,7 @@ jobs:
         run: |
           set -e
           pip install wheel packaging
-          make fuzz
+          make ${{ matrix.fuzzer }}
 
   build-wheel:
     name: Build wheel
