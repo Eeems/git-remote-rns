@@ -448,8 +448,7 @@ class Application:
 
             parameters: list[inspect.Parameter] = list(parameter_iter)
             cache: dict[str, tuple[float, bytes | None]] = {}
-            # TODO lock per path  pylint: disable=W0511
-            lock: threading.Lock = threading.Lock()
+            locks: defaultdict[str, threading.Lock] = defaultdict(threading.Lock)
 
             def handler(
                 path: str,
@@ -507,12 +506,12 @@ class Application:
                     remote_identity,
                     request_at,
                 )
-                with lock:
-                    try:
-                        params = self._parse_params(request, parameters)
-                        idx = sha256(
-                            path.encode() + json.dumps(params, sort_keys=True).encode()
-                        ).hexdigest()
+                try:
+                    params = self._parse_params(request, parameters)
+                    idx = sha256(
+                        path.encode() + json.dumps(params, sort_keys=True).encode()
+                    ).hexdigest()
+                    with locks[idx]:
                         res: Exception | bytes | FileResponse | None = None
                         if ttl is not False and idx in cache:
                             _ttl, res = cache[idx]
@@ -602,14 +601,14 @@ class Application:
 
                         return res
 
-                    except Exception as e:
-                        self._log_request_state(
-                            "ERRORED",
-                            request_hex,
-                            remote_identity,
-                            path,
-                        )
-                        return self.exception(request, e)
+                except Exception as e:
+                    self._log_request_state(
+                        "ERRORED",
+                        request_hex,
+                        remote_identity,
+                        path,
+                    )
+                    return self.exception(request, e)
 
             for path in paths:
                 self.handlers[path] = (handler, compress)

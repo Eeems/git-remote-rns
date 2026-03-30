@@ -236,7 +236,7 @@ class IntegrationStack:
             if self.server_proc.returncode is not None:
                 raise SetupError(
                     f"Server exited early: {self.server_proc.returncode}\n"
-                    + f"{self.server_proc.stdout}"
+                    + f"{self.server_proc.stdout.read() if self.server_proc else ''}"
                 )
 
         def fn(proc: subprocess.Popen[str]):

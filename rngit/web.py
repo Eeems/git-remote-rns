@@ -466,7 +466,7 @@ def _(  # pylint: disable=E0102 # noqa: F811
             micron.page_link(
                 "commits",
                 ">|",
-                {"page": str(last_page), **params},
+                {"page": str(last_page - 1), **params},
             )
         )
 
@@ -537,7 +537,9 @@ def _(  # pylint: disable=E0102 # noqa: F811
     ]
     content: list[bytes] = []
     for line in (
-        git(repo, "diff", "--name-status", f"{sha}~1..{sha}").decode().splitlines(False)
+        git(repo, "show", "--pretty=format:", "--name-status", sha)
+        .decode()
+        .splitlines(False)
     ):
         parts = line.split(maxsplit=1)
         if len(parts) != 2:
@@ -553,7 +555,9 @@ def _(  # pylint: disable=E0102 # noqa: F811
         + b">> "
         + micron.page_link("tree", "tree", {"ref": sha, **params})
         + b"\n>> \n"
-        + micron.escape(git(repo, "log", "--max-count=1", sha, "--pretty=fuller"))
+        + micron.escape(
+            git(repo, "show", "--pretty=fuller", "--parents", "--quiet", sha)
+        )
         + b"\n"
         + b"\n".join(content)
     )
@@ -582,7 +586,7 @@ def _(  # pylint: disable=E0102 # noqa: F811
     ]
     content: list[bytes] = []
     for line in (
-        git(repo, "diff", "-w", f"{sha}~1..{sha}", "--", path)
+        git(repo, "show", "--ignore-all-space", sha, "--", path)
         .decode()
         .splitlines(False)
     ):
@@ -615,7 +619,7 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
     _ = parser.add_argument(
         "-i",
         "--identity",
-        help="Path identity file.",
+        help="Path to identity file.",
         dest="identity",
     )
     _ = parser.add_argument(
@@ -653,7 +657,7 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
         "--allow-debug",
         action="append",
         default=[],
-        help="Identities allowed to see debug information. Will automatically recieve read permissions as well.",
+        help="Identities allowed to see debug information. Will automatically receive read permissions as well.",
         dest="allow_debug",
     )
     _ = parser.add_argument(

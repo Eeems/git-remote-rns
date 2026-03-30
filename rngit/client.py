@@ -153,7 +153,7 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
     _ = parser.add_argument(
         "-i",
         "--identity",
-        help="Path identity file",
+        help="Path to identity file",
         dest="identity",
     )
     _ = parser.add_argument(
