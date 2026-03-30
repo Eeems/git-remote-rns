@@ -22,6 +22,7 @@ from . import (
 from .app import (
     Application,
     Request,
+    SpecialPermissions,
 )
 from .shared import (
     configure_logging,
@@ -111,7 +112,7 @@ def tree(repo: str, ref: str) -> Generator[tuple[str, str, str, str], None, None
         for line in git(repo, "ls-tree", ref).decode().splitlines(False):
             parts = line.split(maxsplit=3)
             if len(parts) != 4:
-                raise RuntimeError("Data returned by git doesn't match expcted format")
+                raise RuntimeError("Data returned by git doesn't match expected format")
 
             perms, ref_type, sha, name = parts
             yield perms, ref_type, sha, name.lstrip()
@@ -396,10 +397,10 @@ def _(  # pylint: disable=E0102 # noqa: F811
     ]
     name = "commits"
     if branch is not None:
-        name += ": branch" + branch
+        name += ": branch " + branch
         breadcrumbs.append(("branch", branch, {"repo": repo, "branch": branch}))
     elif tag is not None:
-        name += ": tag" + tag
+        name += ": tag " + tag
         breadcrumbs.append(("tag", tag, {"repo": repo, "tag": tag}))
 
     params = {"repo": repo}
@@ -531,7 +532,7 @@ def _(  # pylint: disable=E0102 # noqa: F811
     for line in git(repo, "diff", "--name-status", sha).decode().splitlines(False):
         parts = line.split(maxsplit=1)
         if len(parts) != 2:
-            raise RuntimeError("Data returned by git doesn't match expcted format")
+            raise RuntimeError("Data returned by git doesn't match expected format")
 
         _, path = parts
         content.append(
@@ -680,7 +681,7 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
     allow_all_read = args.allow_all_read
 
     assert isinstance(args.allow_read, list)  # pyright: ignore[reportAny]
-    assert all(x for x in args.allow_read if isinstance(x, str))  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+    assert all(isinstance(x, str) for x in args.allow_read)  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
     read_list = set(cast(list[str], args.allow_read))
 
     for allow in read_list:
@@ -688,7 +689,7 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
             raise ValueError(f"Invalid read hexhash: {allow}")
 
     assert isinstance(args.allow_debug, list)  # pyright: ignore[reportAny]
-    assert all(x for x in args.allow_debug if isinstance(x, str))  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+    assert all(isinstance(x, str) for x in args.allow_debug)  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
     debug_list = set(cast(list[str], args.allow_debug))
 
     for allow in debug_list:
@@ -710,8 +711,12 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
 
     log.info("Destination: %s", RNS.prettyhexrep(app.destination.hash))  # pyright: ignore[reportUnknownMemberType]
     log.info("Read list: %s", "(any)" if allow_all_read else read_list)
-    for hexhash in read_list | debug_list:
-        app.permit(hexhash, "read")
+    if allow_all_read:
+        app.permit(SpecialPermissions.ALL, "read")
+
+    else:
+        for hexhash in read_list | debug_list:
+            app.permit(hexhash, "read")
 
     for hexhash in debug_list:
         app.permit(hexhash, "debug")

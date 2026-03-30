@@ -44,8 +44,8 @@ def link(
     params: dict[str, str] | None = None,
     address: str | None = None,
 ) -> bytes:
-    path = escape(path).decode()
     text = escape(text or path).decode()
+    path = escape(path).decode()
     address = address or ""
     fragment = (
         "`"

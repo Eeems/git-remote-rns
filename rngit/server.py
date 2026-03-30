@@ -441,7 +441,7 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
     allow_all_read = args.allow_all_read
 
     assert isinstance(args.allow_read, list)  # pyright: ignore[reportAny]
-    assert all(x for x in args.allow_read if isinstance(x, str))  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+    assert all(isinstance(x, str) for x in args.allow_read)  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
     read_list = set(cast(list[str], args.allow_read))
 
     for allow in read_list:
@@ -454,7 +454,7 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
         )
 
     assert isinstance(args.allow_write, list)  # pyright: ignore[reportAny]
-    assert all(x for x in args.allow_write if isinstance(x, str))  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+    assert all(isinstance(x, str) for x in args.allow_write)  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
     write_list = set(cast(list[str], args.allow_write))
 
     global _write_list
@@ -539,7 +539,7 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
                 repo_path,
                 f"--identity={identity_path}",
                 *(["--verbose"] if verbose else []),
-                f"--name={name}",
+                f"--name={name.decode()}",
                 *(
                     []
                     if announce_interval is None
@@ -552,13 +552,13 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
 
     if announce_interval is None:
         while True:
-            if process is not None and process.returncode is not None:
+            if process is not None and process.poll() is not None:
                 return process.returncode
 
             time.sleep(10)
 
     while True:
-        if process is not None and process.returncode is not None:
+        if process is not None and process.poll() is not None:
             return process.returncode
 
         time.sleep(announce_interval)

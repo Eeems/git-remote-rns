@@ -9,12 +9,12 @@ from typing import (
 try:
     # Added in python 3.12
     from typing import (
-        override,  # pyright: ignore[reportUnknownVariableType,reportAttributeAccessIssue,reportUnknonwnType,reportUnnecessaryTypeIgnoreComment]
+        override,  # pyright: ignore[reportUnknownVariableType,reportAttributeAccessIssue,reportUnknownType,reportUnnecessaryTypeIgnoreComment]
     )
 
 except ImportError:
     from overrides import (  # pyright: ignore[reportMissingImports,reportUnnecessaryTypeIgnoreComment]
-        override,  # pyright: ignore[ reportUnknownVariableType,reportUnnecessaryTypeIgnoreComment]
+        override,  # pyright: ignore[reportUnknownVariableType,reportUnnecessaryTypeIgnoreComment]
     )
 
 override = cast(Callable[[Callable[..., Any]], Callable[..., Any]], override)  # pyright: ignore[reportExplicitAny]

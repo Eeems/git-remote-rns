@@ -9,6 +9,7 @@ import traceback
 import typing
 from argparse import Namespace
 from collections import defaultdict
+from enum import Enum
 from hashlib import sha256
 from io import BufferedReader
 from subprocess import CalledProcessError
@@ -44,18 +45,18 @@ class Request:
         self.request_at: float = request_at
 
     def __contains__(self, name: str) -> bool:
-        return (
-            name in self.data
-            or f"var_{name}" in self.data
-            or f"field_{name}" in self.data
-        )
+        for key in (name, f"var_{name}", f"field_{name}"):
+            if key in self.data:
+                return True
+
+        return False
 
     def param(self, name: str) -> Any:  # pyright: ignore[reportExplicitAny, reportAny]
-        return (
-            self.data.get(name, None)
-            or self.data.get(f"var_{name}", None)
-            or self.data.get(f"field_{name}", None)
-        )
+        for key in (name, f"var_{name}", f"field_{name}"):
+            if key in self.data:
+                return self.data[key]  # pyright: ignore[reportAny]
+
+        return None
 
 
 class BadRequestMethod(Exception):
@@ -121,6 +122,11 @@ class Template:
 
     def __bytes__(self) -> bytes:
         return self()
+
+
+class SpecialPermissions(Enum):
+    ALL = "(any)"
+    NONE = "(none)"
 
 
 class Application:
@@ -271,21 +277,28 @@ class Application:
 
             else:
                 raise InvalidParameterType(
-                    f"Unable to convert parameter {name} into {param_type.__name__}",
+                    f"Unable to convert parameter {name} into {getattr(param_type, '__name__', str(param_type))}",
                     exceptions,
                 )
 
         return params
 
-    def permit(self, identity_or_hexhash: RNS.Identity | str, permission: str):
-        if isinstance(identity_or_hexhash, RNS.Identity):
-            hexhash = identity_or_hexhash.hexhash
+    def permit(
+        self,
+        identity_or_hexhash_or_special: RNS.Identity | str | SpecialPermissions,
+        permission: str,
+    ):
+        if isinstance(identity_or_hexhash_or_special, SpecialPermissions):
+            hexhash = identity_or_hexhash_or_special.value
 
-        elif not is_valid_hexhash(identity_or_hexhash):
-            raise ValueError(f"Invalid hexhash: {identity_or_hexhash}")
+        elif isinstance(identity_or_hexhash_or_special, RNS.Identity):
+            hexhash = identity_or_hexhash_or_special.hexhash
+
+        elif not is_valid_hexhash(identity_or_hexhash_or_special):
+            raise ValueError(f"Invalid hexhash: {identity_or_hexhash_or_special}")
 
         else:
-            hexhash = identity_or_hexhash
+            hexhash = identity_or_hexhash_or_special
 
         assert hexhash is not None
         self.permissions[permission].append(hexhash)
@@ -324,8 +337,13 @@ class Application:
 
                 stacktrace += f"\nstderr: {stderr}"
 
-            cmd = cast(list[str], exception.cmd)
-            message = f"{cmd[0]} returned with exit code {exception.returncode}"
+            if isinstance(exception.cmd, list):  # pyright: ignore[reportAny]
+                cmd = cast(str, exception.cmd[0])
+
+            else:
+                cmd = cast(str, exception.cmd).split()[0]
+
+            message = f"{cmd} returned with exit code {exception.returncode}"
 
         else:
             message = str(exception)
@@ -423,6 +441,8 @@ class Application:
 
             parameters: list[inspect.Parameter] = list(parameter_iter)
             cache: dict[str, tuple[float, bytes | None]] = {}
+            # TODO lock per path  pylint: disable=W0511
+            lock: threading.Lock = threading.Lock()
 
             def handler(
                 path: str,
@@ -434,21 +454,36 @@ class Application:
                 request_hex = hex(int.from_bytes(request_id, "big"))[2:]
                 self._log_request_state("REQUEST", request_hex, remote_identity, path)
                 if permissions:
-                    if remote_identity is None:
-                        self._log_request_state(
-                            "DENIED ",
-                            request_hex,
-                            remote_identity,
-                            path,
-                        )
-                        return self.template("not-identified")()
-
-                    assert remote_identity.hexhash is not None
-                    hexhash = remote_identity.hexhash
                     for permission in permissions:
+                        if SpecialPermissions.ALL.value in self.permissions[permission]:
+                            continue
+
+                        if (
+                            SpecialPermissions.NONE.value
+                            in self.permissions[permission]
+                        ):
+                            self._log_request_state(
+                                "DENIED ",
+                                request_hex,
+                                remote_identity,
+                                path,
+                            )
+                            return self.template("not-allowed")()
+
+                        if remote_identity is None:
+                            self._log_request_state(
+                                "DENIED ",
+                                request_hex,
+                                remote_identity,
+                                path,
+                            )
+                            return self.template("not-identified")()
+
                         if permission == "identified":
                             continue
 
+                        assert remote_identity.hexhash is not None
+                        hexhash = remote_identity.hexhash
                         if hexhash not in self.permissions[permission]:
                             self._log_request_state(
                                 "DENIED ",
@@ -465,95 +500,96 @@ class Application:
                     remote_identity,
                     request_at,
                 )
-                try:
-                    params = self._parse_params(request, parameters)
-                    idx = sha256(
-                        json.dumps(params, sort_keys=True).encode()
-                    ).hexdigest()
-                    res: Exception | bytes | FileResponse | None = None
-                    if ttl is not False and idx in cache:
-                        _ttl, res = cache[idx]
-                        if time.time() < _ttl:
+                with lock:
+                    try:
+                        params = self._parse_params(request, parameters)
+                        idx = sha256(
+                            path.encode() + json.dumps(params, sort_keys=True).encode()
+                        ).hexdigest()
+                        res: Exception | bytes | FileResponse | None = None
+                        if ttl is not False and idx in cache:
+                            _ttl, res = cache[idx]
+                            if time.time() < _ttl:
+                                self._log_request_state(
+                                    "CACHED ",
+                                    request_hex,
+                                    remote_identity,
+                                    path,
+                                )
+                                return res
+
                             self._log_request_state(
-                                "CACHED ",
+                                "STALE  ",
                                 request_hex,
                                 remote_identity,
                                 path,
                             )
-                            return res
+                            del cache[idx]
+
+                        def target(
+                            fn: RequestHandler,
+                            request: Request,
+                            **kwargs,  # pyright: ignore[reportUnknownParameterType, reportMissingParameterType]
+                        ):
+                            nonlocal res
+                            try:
+                                res = fn(request, **kwargs)
+
+                            except Exception as e:
+                                res = e
+
+                        thread = threading.Thread(
+                            target=target,  # pyright: ignore[reportUnknownArgumentType]
+                            args=(
+                                fn,
+                                request,
+                            ),
+                            kwargs=params,
+                        )
+                        thread.start()
+                        thread.join(timeout)
+                        if timeout is not None and thread.is_alive():
+                            self._log_request_state(
+                                "TIMEOUT",
+                                request_hex,
+                                remote_identity,
+                                path,
+                            )
+                            returncode = ctypes.pythonapi.PyThreadState_SetAsyncExc(  # pyright: ignore[reportAny]
+                                thread.native_id, ctypes.py_object(SystemExit)
+                            )
+                            if returncode > 1:
+                                ctypes.pythonapi.PyThreadState_SetAsyncExc(
+                                    thread.native_id, 0
+                                )
+
+                            return self.template("timeout")()
+
+                        if isinstance(res, Exception):
+                            raise res
 
                         self._log_request_state(
-                            "STALE  ",
+                            "HANDLED",
                             request_hex,
                             remote_identity,
                             path,
                         )
-                        del cache[idx]
-
-                    def target(
-                        fn: RequestHandler,
-                        request: Request,
-                        **kwargs,  # pyright: ignore[reportUnknownParameterType, reportMissingParameterType]
-                    ):
-                        nonlocal res
-                        try:
-                            res = fn(request, **kwargs)
-
-                        except Exception as e:
-                            res = e
-
-                    thread = threading.Thread(
-                        target=target,  # pyright: ignore[reportUnknownArgumentType]
-                        args=(
-                            fn,
-                            request,
-                        ),
-                        kwargs=params,
-                    )
-                    thread.start()
-                    thread.join(timeout)
-                    if timeout is not None and thread.is_alive():
-                        self._log_request_state(
-                            "TIMEOUT",
-                            request_hex,
-                            remote_identity,
-                            path,
-                        )
-                        returncode = ctypes.pythonapi.PyThreadState_SetAsyncExc(  # pyright: ignore[reportAny]
-                            thread.native_id, ctypes.py_object(SystemExit)
-                        )
-                        if returncode > 1:
-                            ctypes.pythonapi.PyThreadState_SetAsyncExc(
-                                thread.native_id, 0
+                        if isinstance(res, bytes | None) and ttl is not False:  # pyright: ignore[reportUnnecessaryIsInstance]
+                            cache[idx] = (
+                                time.time() + ttl if ttl else 0,
+                                res,
                             )
 
-                        return self.template("timeout")()
+                        return res
 
-                    if isinstance(res, Exception):
-                        raise res
-
-                    self._log_request_state(
-                        "HANDLED",
-                        request_hex,
-                        remote_identity,
-                        path,
-                    )
-                    if isinstance(res, bytes | None) and ttl is not False:  # pyright: ignore[reportUnnecessaryIsInstance]
-                        cache[idx] = (
-                            time.time() + ttl if ttl else 0,
-                            res,
+                    except Exception as e:
+                        self._log_request_state(
+                            "ERRORED",
+                            request_hex,
+                            remote_identity,
+                            path,
                         )
-
-                    return res
-
-                except Exception as e:
-                    self._log_request_state(
-                        "ERRORED",
-                        request_hex,
-                        remote_identity,
-                        path,
-                    )
-                    return self.exception(request, e)
+                        return self.exception(request, e)
 
             for path in paths:
                 self.handlers[path] = (handler, compress)
