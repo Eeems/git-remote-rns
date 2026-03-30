@@ -47,6 +47,6 @@ Thumbs.db
 .pytest_cache/
 wheelhouse/
 .repos/
-fuzz/*/crash-*
-fuzz/*/oom-*
-fuzz/*/timeout-*
+fuzz/crash-*
+fuzz/oom-*
+fuzz/timeout-*

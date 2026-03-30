@@ -1,8 +1,10 @@
 import json
+import logging
 import os
 import sys
 import tempfile
 from hashlib import sha256
+from subprocess import CalledProcessError
 
 import atheris
 
@@ -13,6 +15,7 @@ with atheris.instrument_imports():
         Request,
     )
     from rngit.shared import (  # pyright: ignore[reportImplicitRelativeImport]
+        configure_logging,
         is_valid_hexhash,
     )
 
@@ -36,7 +39,7 @@ if not os.path.exists(seed_path):
         _ = f.write(struct.pack("f", 1.0))
         _ = f.write(True.to_bytes())
 
-
+configure_logging("fuzz", logging.FATAL)
 with tempfile.TemporaryDirectory(prefix="rngit_fuzz_") as t:
 
     def TestOneInput(data: bytes) -> None:
@@ -62,24 +65,37 @@ with tempfile.TemporaryDirectory(prefix="rngit_fuzz_") as t:
             "_float": fdp.ConsumeFloat(),
             "_bool": fdp.ConsumeBool(),
         }
-
-        parameters = app._get_parameters(fn)  # pyright: ignore[reportPrivateUsage] # pylint: disable=W0212
-        request = Request(path, data, hexhash, None, 0.0)
         try:
-            params = app._parse_params(request, parameters)  # pyright: ignore[reportPrivateUsage] # pylint: disable=W0212
+            parameters = app._get_parameters(fn)  # pyright: ignore[reportPrivateUsage] # pylint: disable=W0212
+            request = Request(path, data, hexhash, None, 0.0)
+            try:
+                params = app._parse_params(request, parameters)  # pyright: ignore[reportPrivateUsage] # pylint: disable=W0212
 
-        except InvalidParameterType as e:
-            print(data)
-            raise e.exceptions[0] from e  # pylint: disable=E1136
+            except InvalidParameterType as e:
+                raise e.exceptions[0] from e  # pylint: disable=E1136
 
-        idx = sha256(
-            path.encode() + json.dumps(params, sort_keys=True).encode()
-        ).hexdigest()
-        _ = app.is_cached(idx)
-        app.push_cache(idx, 0.0, None)
-        app.purge_cache()
-        app.permit(hexhash, permission)
-        _ = app.default_handler(path, data, request_id, None, 0)
+            idx = sha256(
+                path.encode() + json.dumps(params, sort_keys=True).encode()
+            ).hexdigest()
+            _ = app.is_cached(idx)
+            app.push_cache(idx, 0.0, None)
+            app.purge_cache()
+            app.permit(hexhash, permission)
+            _ = app.default_handler(path, data, request_id, None, 0)
+            _ = app.exception(request, Exception(path))
+            _ = app.exception(
+                request,
+                CalledProcessError(1, f"{path} {path}", path, path),
+            )
+            _ = app.exception(request, CalledProcessError(1, [path, path], path, path))
+
+        except Exception:
+            print(f"request_id: {request_id}")
+            print(f"hexhash: {hexhash}")
+            print(f"path: {path.encode()}")
+            print(f"permission: {permission.encode()}")
+            print(f"data: {data}")
+            raise
 
     arg0 = sys.argv[0]
     argv = sys.argv[1:]

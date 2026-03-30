@@ -1,3 +1,4 @@
+import logging
 import os
 import sys
 import tempfile
@@ -20,9 +21,11 @@ with atheris.instrument_imports():
     )
     from rngit.shared import (  # pyright: ignore[reportImplicitRelativeImport]
         _normalize_repo,  # pyright: ignore[reportPrivateUsage]
+        configure_logging,
         is_valid_hexhash,
     )
 
+configure_logging("fuzz", logging.FATAL)
 corpus = os.path.join("corpus", os.path.splitext(os.path.basename(__file__))[0])
 with tempfile.TemporaryDirectory(prefix="rngit_fuzz_") as t:
 

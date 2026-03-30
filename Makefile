@@ -16,6 +16,8 @@ TESTS := $(shell find tests -type f -name '*.py')
 INDIVIDUAL_TESTS := $(shell SKIP_TESTS=1 MAKEFLAGS= make --no-print-directory list-tests)
 endif
 
+FUZZERS := $(shell find fuzz -maxdepth 1 -type f -name '*.py')
+
 ifeq ($(VENV_BIN_ACTIVATE),)
 VENV_BIN_ACTIVATE := .venv/bin/activate
 endif
@@ -189,6 +191,10 @@ list-tests: ## List all available tests
 	| grep -v ' tests collected in ' \
 	| xargs -n1
 
+.PHONY: list-fuzzers
+list-fuzzers:
+	@echo $(FUZZERS) | xargs -n1
+
 ifndef SKIP_TESTS
 define test-target
 .PHONY: $2
@@ -216,6 +222,23 @@ $(foreach T,\
 	))\
 )
 endif
+define fuzz-target
+.PHONY: $2
+$1: requirements-fuzz
+	@. ${VENV_BIN_ACTIVATE}; \
+	cd fuzz; \
+	python $2 \
+	  -rss_limit_mb=2048 \
+	  -timeout=$$(FUZZ_TIMEOUT) \
+	  -timeout_exitcode=0
+endef
+$(foreach T,\
+	$(FUZZERS),\
+	$(eval $(call fuzz-target,\
+		$(T),\
+		$(shell basename $(T)),\
+	))\
+)
 
 .PHONY: build
 build: sdist wheel ## Build wheel and sdist
