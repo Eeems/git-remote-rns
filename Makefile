@@ -115,8 +115,7 @@ fuzz: requirements-fuzz ## Run fuzz tests
 	find . -type f -name '*.py' | xargs -I {} \
 	python {} \
 	  -rss_limit_mb=2048 \
-	  -timeout=$(FUZZ_TIMEOUT) \
-	  -timeout_exitcode=0
+	  -max_total_time=$(FUZZ_TIMEOUT)
 
 .repos:
 	mkdir -p .repos
