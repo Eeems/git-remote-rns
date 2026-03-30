@@ -48,3 +48,5 @@ Thumbs.db
 wheelhouse/
 .repos/
 fuzz/crash-*
+fuzz/oom-*
+fuzz/timeout-*
