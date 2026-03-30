@@ -254,7 +254,7 @@ whitelist: requirements-dev ## Generate lint whitelists
 
 
 .PHONY: lint
-lint: requirements-dev requirements-web requirements-test ## Lint the codebase
+lint: requirements-dev requirements-web requirements-test requirements-fuzz ## Lint the codebase
 	@set -e;\
 	. ${VENV_BIN_ACTIVATE}; \
 	runtool() { \
