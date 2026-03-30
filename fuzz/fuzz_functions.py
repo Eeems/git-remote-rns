@@ -11,7 +11,7 @@ with atheris.instrument_imports():
         c_style_quote,
     )
     from rngit.micron import (  # pyright: ignore[reportImplicitRelativeImport]
-        convert_markdown,
+        # convert_markdown,
         escape,
         escape_inline,
         file_link,
@@ -45,7 +45,8 @@ with tempfile.TemporaryDirectory(prefix="rngit_fuzz_") as t:
         _ = paramescape(text_no_surrogates)
         _ = escape(text_no_surrogates)
         _ = escape_inline(text_no_surrogates)
-        _ = convert_markdown(text_no_surrogates)
+        # Don't fuzz until https://github.com/frostming/marko/issues/259 is solved
+        # _ = convert_markdown(text_no_surrogates)
 
         if "\x00" in text or text in (".", "..", ".git", ""):
             return
