@@ -497,21 +497,26 @@ def _(  # pylint: disable=E0102 # noqa: F811
     if ref is not None:
         params["ref"] = ref
 
-    content = git(repo, "cat-file", "blob", f"{ref or 'HEAD'}:{path}")
-    try:
-        if path.endswith(".md"):
-            try:
-                content = micron.convert_markdown(content)
+    size = int(git(repo, "cat-file", "-s", f"{ref or 'HEAD'}:{path}").decode())
+    if size > 524_288:
+        content = b"`c(too large to display)"
 
-            except Exception:
-                log.error(traceback.format_exc())
+    else:
+        content = git(repo, "cat-file", "blob", f"{ref or 'HEAD'}:{path}")
+        try:
+            if path.endswith(".md"):
+                try:
+                    content = micron.convert_markdown(content)
+
+                except Exception:
+                    log.error(traceback.format_exc())
+                    content = micron.escape(content)
+
+            else:
                 content = micron.escape(content)
 
-        else:
-            content = micron.escape(content)
-
-    except UnicodeDecodeError:
-        content = b"(binary content)"
+        except UnicodeDecodeError:
+            content = b"`c(binary content)"
 
     return header(f"blob: {os.path.basename(path)}", breadcrumbs) + content
 
