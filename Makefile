@@ -220,7 +220,6 @@ define fuzz-target
 $1: requirements-fuzz
 	@. $${VENV_BIN_ACTIVATE}; \
 	cd fuzz; \
-	timeout $$$$(( $$FUZZ_TIMEOUT + 30 )) \
 	python $2 \
 	  -rss_limit_mb=2048 \
 	  -max_total_time=$$(FUZZ_TIMEOUT)
