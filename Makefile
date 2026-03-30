@@ -109,13 +109,7 @@ test: requirements-test ## Run tests
 	  tests/
 
 .PHONY: fuzz
-fuzz: requirements-fuzz ## Run fuzz tests
-	@. ${VENV_BIN_ACTIVATE}; \
-	cd fuzz; \
-	find . -type f -name '*.py' | xargs -I {} \
-	python {} \
-	  -rss_limit_mb=2048 \
-	  -max_total_time=$(FUZZ_TIMEOUT)
+fuzz: $(FUZZERS) ## Run fuzz tests
 
 .repos:
 	mkdir -p .repos
@@ -224,8 +218,9 @@ endif
 define fuzz-target
 .PHONY: $2
 $1: requirements-fuzz
-	@. ${VENV_BIN_ACTIVATE}; \
+	@. $${VENV_BIN_ACTIVATE}; \
 	cd fuzz; \
+	timeout $$$$(( $$FUZZ_TIMEOUT + 30 )) \
 	python $2 \
 	  -rss_limit_mb=2048 \
 	  -max_total_time=$$(FUZZ_TIMEOUT)
