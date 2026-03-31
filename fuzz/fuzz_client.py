@@ -5,7 +5,6 @@ import os
 import random
 import re
 import select
-import shutil
 import string
 import subprocess
 import sys
@@ -53,14 +52,14 @@ rnsd_process: subprocess.Popen[bytes] | None = None
 rngit_process: subprocess.Popen[str] | None = None
 
 
-def start_rnsd(config_dir: str) -> subprocess.Popen[bytes]:
+def start_rnsd(config_dir: str) -> subprocess.Popen[bytes]:  # pylint: disable=W0621
     global rnsd_process
     rns_config = os.path.join(config_dir, "config")
-    with open(rns_config, "w") as f:
+    with open(rns_config, "w", encoding="utf-8") as f:  # pylint: disable=W0621
         _ = f.write(RETICULUM_CONFIG.format(randomword=randomword(5)))
 
     print("Starting rnsd...")
-    rnsd_proc = subprocess.Popen(
+    rnsd_proc = subprocess.Popen(  # pylint: disable=R1732
         [
             sys.executable,
             "-m",
@@ -114,7 +113,7 @@ def start_rnsd(config_dir: str) -> subprocess.Popen[bytes]:
             _ = rnsd_proc.wait()
 
         if remaining:
-            rnsd_proc = subprocess.Popen(
+            rnsd_proc = subprocess.Popen(  # pylint: disable=R1732
                 [
                     sys.executable,
                     "-m",
@@ -149,11 +148,11 @@ def start_rnsd(config_dir: str) -> subprocess.Popen[bytes]:
     return rnsd_proc
 
 
-def start_rngit_server(config_dir: str, server_repo: str, client_hexhash: str) -> str:
+def start_rngit_server(config_dir: str, server_repo: str, client_hexhash: str) -> str:  # pylint: disable=W0621
     global rngit_process
     print("Starting rngit server...")
 
-    rngit_proc = subprocess.Popen(
+    rngit_proc = subprocess.Popen(  # pylint: disable=R1732
         [
             sys.executable,
             "-m",
@@ -223,14 +222,15 @@ def start_rngit_server(config_dir: str, server_repo: str, client_hexhash: str) -
 
     def log_output(proc: subprocess.Popen[str]):
         while proc.returncode is None:
-            for f in (proc.stdout, proc.stderr):
-                if f is not None:
-                    line = f.readline()
-                    if line:
-                        print(line, end="")
+            for output in (proc.stdout, proc.stderr):
+                if output is None:
+                    continue
+
+                line = output.readline()
+                if line:
+                    print(line, end="")
 
     threading.Thread(target=log_output, args=(rngit_proc,)).start()
-
     return dest_hash
 
 
@@ -291,14 +291,14 @@ with tempfile.TemporaryDirectory() as temp_dir:
 
     client_repo = os.path.join(temp_dir, "client_repo")
     os.makedirs(client_repo, exist_ok=True)
-    client._repo_path = client_repo  # pyright: ignore[reportPrivateUsage]
+    client._repo_path = client_repo  # pyright: ignore[reportPrivateUsage] # pylint: disable=W0212
 
     identity_path = os.path.join(config_dir, "identity")
     identity = RNS.Identity(True)
     _ = identity.to_file(identity_path)  # pyright: ignore[reportUnknownMemberType]
     client_identity = identity.hexhash
     assert client_identity is not None
-    client._identity = identity  # pyright: ignore[reportPrivateUsage]
+    client._identity = identity  # pyright: ignore[reportPrivateUsage] # pylint: disable=W0212
 
     print(f"Client identity: {client_identity}")
 
@@ -321,22 +321,18 @@ with tempfile.TemporaryDirectory() as temp_dir:
                 _ = f.write(seed)
 
     try:
-        subprocess.run(
-            ["git", "config", "--global", "init.defaultBranch", "master"],
-            check=True,
+        _ = subprocess.check_call(
+            ["git", "config", "--global", "init.defaultBranch", "master"]
         )
-        subprocess.run(
-            ["git", "config", "--global", "user.name", "rngit"],
-            check=True,
+        _ = subprocess.check_call(["git", "config", "--global", "user.name", "rngit"])
+        _ = subprocess.check_call(
+            ["git", "config", "--global", "user.email", "root@localhost"]
         )
-        subprocess.run(
-            ["git", "config", "--global", "user.email", "root@localhost"],
-            check=True,
-        )
-
         _ = subprocess.check_call(["git", "init"], cwd=server_repo)
         _ = subprocess.check_call(["git", "init"], cwd=client_repo)
-        _ = subprocess.check_call(["touch", "a"], cwd=server_repo)
+        with open(os.path.join(server_repo, "a"), "w", encoding="utf-8") as f:
+            _ = f.write("")
+
         _ = subprocess.check_call(["git", "add", "a"], cwd=server_repo)
         _ = subprocess.check_call(["git", "commit", "-m", "a"], cwd=server_repo)
 

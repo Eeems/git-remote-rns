@@ -59,7 +59,7 @@ def git(
             output: IO[bytes] | int | None,
         ):
             if stream is None or not isinstance(output, io.IOBase):
-                return None
+                return
 
             def fn(stream: IO[bytes]):
                 _ = output.write(stream.readline())
