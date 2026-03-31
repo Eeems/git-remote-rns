@@ -257,6 +257,8 @@ except Exception:
         _ = subprocess.call(["docker", "logs", server_container_id])
         print("EOF")
 
+    raise
+
 finally:
     print("Cleaning up...")
     for x in [client_container_id, server_container_id]:
