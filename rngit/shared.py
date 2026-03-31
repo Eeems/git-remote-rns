@@ -18,11 +18,11 @@ class packets(Enum):
 
 class ExitCodes(Enum):
     SUCCESS = 0
-    EXCEPTION = -errno.EFAULT
-    UNKNOWN_COMMAND = -errno.EBADRQC
-    REMOTE_ERROR = -errno.EBADMSG
-    BAD_ARGUMENT = -errno.EINVAL
-    NETWORK_ERROR = -errno.ECANCELED
+    EXCEPTION = errno.EFAULT
+    UNKNOWN_COMMAND = errno.EBADRQC
+    REMOTE_ERROR = errno.EBADMSG
+    BAD_ARGUMENT = errno.EINVAL
+    NETWORK_ERROR = errno.ECANCELED
 
 
 def configure_logging(name: str, level: int = logging.WARNING):

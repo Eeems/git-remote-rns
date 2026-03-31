@@ -86,7 +86,7 @@ requirements-dev: $(VENV_BIN_ACTIVATE) pyproject.toml ## Install dev requirement
 	  ".[dev]"
 
 .PHONY: requirements-test
-requirements-test: requirements-web ## Install test requirements
+requirements-test: requirements-web $(VENV_BIN_ACTIVATE) pyproject.toml ## Install test requirements
 	@. ${VENV_BIN_ACTIVATE}; \
 	python -m pip install \
 	  --quiet \
@@ -94,7 +94,7 @@ requirements-test: requirements-web ## Install test requirements
 	  ".[test]"
 
 .PHONY: requirements-fuzz
-requirements-fuzz: requirements-web ## Install test requirements
+requirements-fuzz: requirements-web $(VENV_BIN_ACTIVATE) pyproject.toml ## Install test requirements
 	@. ${VENV_BIN_ACTIVATE}; \
 	python -m pip install \
 	  --quiet \
@@ -296,7 +296,7 @@ lint: requirements-dev requirements-web requirements-test requirements-fuzz ## L
 	  done; \
 	done; \
 	runtool bandit --recursive --configfile pyproject.toml .; \
-	runtool dodgy --zero-exit; \
+	runtool dodgy --zero-exit --ignore-paths dist/ build/ .venv/ .repos/; \
 	runtool pyroma .
 
 .PHONY: review
