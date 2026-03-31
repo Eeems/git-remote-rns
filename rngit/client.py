@@ -21,6 +21,7 @@ import RNS
 from . import __version__
 from .shared import (
     APP_NAME,
+    BytesIOWrapper,
     ExitCodes,
     configure_logging,
     is_valid_hexhash,
@@ -270,7 +271,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     _identity = identity
 
     try:
-        stdin_loop(destination, sys.stdin, sys.stdout.buffer, sys.stderr.buffer)
+        with BytesIOWrapper(sys.stdout) as stdout, BytesIOWrapper(sys.stderr) as stderr:
+            stdin_loop(destination, sys.stdin, stdout, stderr)
 
     except ClientException as e:
         log.error(e)

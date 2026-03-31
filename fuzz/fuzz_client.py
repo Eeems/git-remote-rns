@@ -11,17 +11,23 @@ import sys
 import tempfile
 import threading
 import time
-from contextlib import redirect_stderr, redirect_stdout
-from typing import IO, cast
+from contextlib import (
+    redirect_stderr,
+    redirect_stdout,
+)
+from typing import (
+    IO,
+    cast,
+)
 
 import atheris
 import RNS
 
-from rngit._compat import override
-
 with atheris.instrument_imports():
     from rngit import client  # pyright: ignore[reportImplicitRelativeImport]
+    from rngit._compat import override
     from rngit.shared import (  # pyright: ignore[reportImplicitRelativeImport]
+        BytesIOWrapper,
         ExitCodes,
         configure_logging,
     )
@@ -258,30 +264,7 @@ def cleanup():
 
 
 configure_logging("fuzz", logging.FATAL)
-
-
-class BytesIOWrapper(io.BufferedWriter):
-    """Wrap a buffered bytes stream over TextIOBase string stream."""
-
-    def __init__(
-        self,
-        buffer: IO[str],
-        encoding: str | None = None,
-        errors: str | None = None,
-        **kwargs,
-    ):
-        super().__init__(buffer, **kwargs)
-        self.encoding: str = encoding or buffer.encoding or "utf-8"
-        self.errors: str = errors or buffer.errors or "strict"
-
-    @override
-    def write(self, data: bytes) -> int:
-        return cast(IO[str], cast(object, self.raw)).write(data.decode())
-
-
 allowed_exit_codes = [x.value for x in ExitCodes if x is not ExitCodes.EXCEPTION]
-
-
 with tempfile.TemporaryDirectory() as temp_dir:
     config_dir = os.path.join(temp_dir, "config")
     os.makedirs(config_dir, exist_ok=True)

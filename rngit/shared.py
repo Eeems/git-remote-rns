@@ -1,12 +1,19 @@
 import errno
+import io
 import logging
 import os
 import string
 import subprocess
 import sys
 from enum import Enum
+from typing import (
+    IO,
+    cast,
+)
 
 import RNS
+
+from ._compat import override
 
 APP_NAME = "git"
 EXPECTED_HEXHASH_LENGTH = (RNS.Reticulum.TRUNCATED_HASHLENGTH // 8) * 2
@@ -84,3 +91,26 @@ def find_repos(root_dir: str) -> list[str]:
             text=True,
         ).splitlines(False)
     ]
+
+
+class BytesIOWrapper(io.BufferedWriter):
+    """Wrap a buffered bytes stream over TextIOBase string stream."""
+
+    def __init__(
+        self,
+        buffer: IO[str],
+        encoding: str | None = None,
+        errors: str | None = None,
+        **kwargs,
+    ):
+        super().__init__(buffer, **kwargs)
+        self.encoding: str = encoding or getattr(buffer, "encoding", None) or "utf-8"
+        self.errors: str = errors or getattr(buffer, "errors", None) or "strict"
+
+    @override
+    def write(self, data: bytes) -> int:
+        return cast(IO[str], cast(object, self.raw)).write(data.decode())
+
+    @override
+    def flush(self):
+        cast(IO[str], cast(object, self.raw)).flush()
