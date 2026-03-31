@@ -1,6 +1,6 @@
 [project]
 name = "git-remote-rns"
-version = "0.2.1"
+version = "0.2.2"
 description = "Git remote helper for syncing repositories over Reticulum"
 requires-python = ">=3.11"
 license = "MIT"
