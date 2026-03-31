@@ -8,7 +8,7 @@ import threading
 import traceback
 from collections.abc import Sequence
 from tempfile import TemporaryDirectory
-from typing import cast
+from typing import IO
 
 import RNS
 
@@ -141,7 +141,7 @@ def c_style_quote(value: bytes | str) -> str:
     return escaped + '"'
 
 
-def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
+def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="git-remote-rns")
     _ = parser.add_argument("remote", help="Remote name (ignored)")
     _ = parser.add_argument("url", help="Remote URL (<hash>[/path])")
@@ -206,16 +206,20 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
     global _identity
     _identity = identity
 
+    return stdin_loop(destination, sys.stdin).value
+
+
+def stdin_loop(destination: bytes, stdin: IO[str]) -> ExitCodes:  # noqa: MC0001
     if not RNS.Transport.has_path(destination):  # pyright: ignore[reportUnknownMemberType]
         RNS.Transport.request_path(destination)  # pyright: ignore[reportUnknownMemberType]
         if not RNS.Transport.await_path(destination, 30):  # pyright: ignore[reportUnknownMemberType]
             log.error("Timed out waiting for path")
-            return ExitCodes.NETWORK_ERROR.value
+            return ExitCodes.NETWORK_ERROR
 
     server_identity = RNS.Identity.recall(destination)  # pyright: ignore[reportUnknownMemberType]
     if server_identity is None:
         log.error("Failed to get server identity")
-        return ExitCodes.NETWORK_ERROR.value
+        return ExitCodes.NETWORK_ERROR
 
     server_destination = RNS.Destination(
         server_identity,
@@ -228,14 +232,14 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
     fetch_queue: list[tuple[str, str]] = []
     global _linkEvent  # pylint: disable=W0602 # noqa: F999
     try:  # pylint: disable=too-many-nested-blocks
-        for line in sys.stdin:
+        for line in stdin:
             _ = _linkEvent.wait()
             if not line:
                 continue
 
             log.debug("STDIN %s", line.encode(errors="replace"))
 
-            parts = cast(list[str], line.split(maxsplit=1))
+            parts = line.split(maxsplit=1)
             assert isinstance(parts, list)
             if not parts:
                 log.debug("\\n")
@@ -303,7 +307,7 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
                     if err is not None:
                         _ = sys.stderr.write(err)
                         _ = sys.stderr.write("\n")
-                        return ExitCodes.REMOTE_ERROR.value
+                        return ExitCodes.REMOTE_ERROR
 
                     assert data is not None
                     with TemporaryDirectory() as tmpdir:
@@ -372,7 +376,7 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
                     if err is not None:
                         _ = sys.stderr.write(err)
                         _ = sys.stderr.write("\n")
-                        return ExitCodes.REMOTE_ERROR.value
+                        return ExitCodes.REMOTE_ERROR
 
                     assert data is not None
                     _ = sys.stdout.buffer.write(data)
@@ -381,20 +385,20 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
 
                 case _:
                     _ = sys.stderr.write(f"Unknown command: {parts[0]}\n")
-                    return ExitCodes.UNKNOWN_COMMAND.value
+                    return ExitCodes.UNKNOWN_COMMAND
 
         log.debug("End of stdin")
 
     except (UnicodeDecodeError, UnicodeEncodeError):
         log.error(traceback.format_exc())
-        return ExitCodes.UNICODE_ERROR.value
+        return ExitCodes.UNICODE_ERROR
 
     except Exception:
         log.error(traceback.format_exc())
-        return ExitCodes.EXCEPTION.value
+        return ExitCodes.EXCEPTION
 
     finally:
         log.debug("Closing link")
         link.teardown()
 
-    return ExitCodes.SUCCESS.value
+    return ExitCodes.SUCCESS
