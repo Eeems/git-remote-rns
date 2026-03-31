@@ -166,7 +166,9 @@ exec -a rnsd /usr/local/bin/rnsd -vvv
             if isup_result.stderr.startswith("Error response from daemon:"):
                 raise RuntimeError(f"Client failed to start:\n{isup_result.stderr}")
 
-        allowed_exit_codes = [x.value for x in ExitCodes]
+        allowed_exit_codes = [
+            x.value for x in ExitCodes if x is not ExitCodes.EXCEPTION
+        ]
 
         def TestOneInput(data: bytes) -> None:
             assert client_container_id is not None
