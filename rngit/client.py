@@ -385,6 +385,10 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
 
         log.debug("End of stdin")
 
+    except (UnicodeDecodeError, UnicodeEncodeError):
+        log.error(traceback.format_exc())
+        return ExitCodes.UNICODE_ERROR.value
+
     except Exception:
         log.error(traceback.format_exc())
         return ExitCodes.EXCEPTION.value

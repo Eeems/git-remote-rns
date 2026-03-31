@@ -23,6 +23,7 @@ class ExitCodes(Enum):
     REMOTE_ERROR = errno.EBADMSG
     BAD_ARGUMENT = errno.EINVAL
     NETWORK_ERROR = errno.ECANCELED
+    UNICODE_ERROR = errno.EBADE
 
 
 def configure_logging(name: str, level: int = logging.WARNING):
