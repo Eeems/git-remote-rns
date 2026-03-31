@@ -24,6 +24,7 @@ class ExitCodes(Enum):
     BAD_ARGUMENT = errno.EINVAL
     NETWORK_ERROR = errno.ECANCELED
     UNICODE_ERROR = errno.EBADE
+    CHILD_EXCEPTION = errno.ECHILD
 
 
 def configure_logging(name: str, level: int = logging.WARNING):

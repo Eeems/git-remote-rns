@@ -206,20 +206,43 @@ def main(argv: Sequence[str] | None = None) -> int:
     global _identity
     _identity = identity
 
-    return stdin_loop(destination, sys.stdin).value
+    try:
+        stdin_loop(destination, sys.stdin)
+
+    except ClientException as e:
+        log.error(e)
+        return e.exitcode.value
+
+    except (UnicodeDecodeError, UnicodeEncodeError):
+        log.error(traceback.format_exc())
+        return ExitCodes.UNICODE_ERROR.value
+
+    except subprocess.CalledProcessError:
+        log.error(traceback.format_exc())
+        return ExitCodes.CHILD_EXCEPTION.value
+
+    except Exception:
+        log.error(traceback.format_exc())
+        return ExitCodes.EXCEPTION.value
+
+    return ExitCodes.SUCCESS.value
 
 
-def stdin_loop(destination: bytes, stdin: IO[str]) -> ExitCodes:  # noqa: MC0001
+class ClientException(Exception):
+    def __init__(self, exitcode: ExitCodes, message: str):
+        super().__init__(message)
+        self.exitcode: ExitCodes = exitcode
+
+
+def stdin_loop(destination: bytes, stdin: IO[str]) -> None:  # noqa: MC0001
     if not RNS.Transport.has_path(destination):  # pyright: ignore[reportUnknownMemberType]
         RNS.Transport.request_path(destination)  # pyright: ignore[reportUnknownMemberType]
         if not RNS.Transport.await_path(destination, 30):  # pyright: ignore[reportUnknownMemberType]
-            log.error("Timed out waiting for path")
-            return ExitCodes.NETWORK_ERROR
+            raise ClientException(ExitCodes.NETWORK_ERROR, "Timed out waiting for path")
 
     server_identity = RNS.Identity.recall(destination)  # pyright: ignore[reportUnknownMemberType]
     if server_identity is None:
-        log.error("Failed to get server identity")
-        return ExitCodes.NETWORK_ERROR
+        raise ClientException(ExitCodes.NETWORK_ERROR, "Failed to get server identity")
 
     server_destination = RNS.Destination(
         server_identity,
@@ -307,7 +330,7 @@ def stdin_loop(destination: bytes, stdin: IO[str]) -> ExitCodes:  # noqa: MC0001
                     if err is not None:
                         _ = sys.stderr.write(err)
                         _ = sys.stderr.write("\n")
-                        return ExitCodes.REMOTE_ERROR
+                        raise ClientException(ExitCodes.REMOTE_ERROR, "Remote error")
 
                     assert data is not None
                     with TemporaryDirectory() as tmpdir:
@@ -376,7 +399,7 @@ def stdin_loop(destination: bytes, stdin: IO[str]) -> ExitCodes:  # noqa: MC0001
                     if err is not None:
                         _ = sys.stderr.write(err)
                         _ = sys.stderr.write("\n")
-                        return ExitCodes.REMOTE_ERROR
+                        raise ClientException(ExitCodes.REMOTE_ERROR, "Remote error")
 
                     assert data is not None
                     _ = sys.stdout.buffer.write(data)
@@ -385,20 +408,12 @@ def stdin_loop(destination: bytes, stdin: IO[str]) -> ExitCodes:  # noqa: MC0001
 
                 case _:
                     _ = sys.stderr.write(f"Unknown command: {parts[0]}\n")
-                    return ExitCodes.UNKNOWN_COMMAND
+                    raise ClientException(
+                        ExitCodes.UNKNOWN_COMMAND, f"Unknown command: {parts[0]}"
+                    )
 
         log.debug("End of stdin")
-
-    except (UnicodeDecodeError, UnicodeEncodeError):
-        log.error(traceback.format_exc())
-        return ExitCodes.UNICODE_ERROR
-
-    except Exception:
-        log.error(traceback.format_exc())
-        return ExitCodes.EXCEPTION
 
     finally:
         log.debug("Closing link")
         link.teardown()
-
-    return ExitCodes.SUCCESS
