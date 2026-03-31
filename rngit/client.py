@@ -7,7 +7,6 @@ import selectors
 import subprocess
 import sys
 import threading
-import traceback
 from collections.abc import Sequence
 from tempfile import TemporaryDirectory
 from typing import (
@@ -84,11 +83,14 @@ def git(
         wrap(process.stderr, stderr)
         if process.stdout is not None or process.stderr is not None:
             while process.poll() is None:
-                events = selector.select()
+                events = selector.select(timeout=1)
                 for key, _ in events:
                     fn = cast(Callable[[IO[bytes]], None], key.data)
                     stream = cast(IO[bytes], key.fileobj)
                     fn(stream)
+
+                if process.poll() is not None:
+                    break
 
     returncode = process.wait()
     flush(process.stdout, stdout)
@@ -275,19 +277,19 @@ def main(argv: Sequence[str] | None = None) -> int:
             stdin_loop(destination, sys.stdin, stdout, stderr)
 
     except ClientException as e:
-        log.error(e)
+        log.exception(e)
         return e.exitcode.value
 
     except (UnicodeDecodeError, UnicodeEncodeError):
-        log.error(traceback.format_exc())
+        log.exception("Unicode error")
         return ExitCodes.UNICODE_ERROR.value
 
     except subprocess.CalledProcessError:
-        log.error(traceback.format_exc())
+        log.exception("Child process error")
         return ExitCodes.CHILD_EXCEPTION.value
 
     except Exception:
-        log.error(traceback.format_exc())
+        log.exception("Unexpected error")
         return ExitCodes.EXCEPTION.value
 
     return ExitCodes.SUCCESS.value
@@ -349,8 +351,8 @@ def stdin_loop(
                             remote_ref.encode(),
                         )
                         if err is not None:
-                            _ = sys.stderr.write(err)
-                            _ = sys.stderr.write("\n")
+                            _ = stderr.write(err.encode())
+                            _ = stderr.write(b"\n")
                             log_and_stdout(
                                 stdout,
                                 f"error {remote_ref} {c_style_quote(err)}\n",
@@ -361,8 +363,8 @@ def stdin_loop(
                             log_and_stdout(stdout, f"ok {remote_ref}\n")
 
                         if data:
-                            _ = sys.stderr.buffer.write(data)
-                            _ = sys.stderr.buffer.write(b"\n")
+                            _ = stderr.write(data)
+                            _ = stderr.write(b"\n")
 
                     else:
                         with TemporaryDirectory() as tmpdir:
@@ -398,8 +400,8 @@ def stdin_loop(
                     sha, ref = fetch_queue.pop(0)
                     err, data = request(link, "fetch", f"{sha} {ref}".encode())
                     if err is not None:
-                        _ = sys.stderr.write(err)
-                        _ = sys.stderr.write("\n")
+                        _ = stderr.write(err.encode())
+                        _ = stderr.write(b"\n")
                         raise ClientException(ExitCodes.REMOTE_ERROR, "Remote error")
 
                     assert data is not None

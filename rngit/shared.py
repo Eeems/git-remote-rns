@@ -109,7 +109,12 @@ class BytesIOWrapper(io.BufferedWriter):
 
     @override
     def write(self, buffer: bytes) -> int:
-        return cast(IO[str], cast(object, self.raw)).write(buffer.decode())
+        text = buffer.decode(self.encoding, self.errors)
+        chars_written = cast(IO[str], cast(object, self.raw)).write(text)
+        if chars_written < len(text):
+            return len(text[:chars_written].encode(self.encoding, self.errors))
+
+        return len(buffer)
 
     @override
     def flush(self):

@@ -140,12 +140,15 @@ def start_rnsd(config_dir: str) -> subprocess.Popen[bytes]:  # pylint: disable=W
 
     def log_output(proc: subprocess.Popen[bytes]):
         while proc.returncode is None:
-            if proc.stdout:
-                line = proc.stdout.readline()
-                if line:
-                    print(line.decode(), end="")
+            try:
+                if proc.stdout:
+                    line = proc.stdout.readline()
+                    if line:
+                        print(line.decode(), end="")
+            except Exception as e:
+                print(f"Exception in log_output: {e}")
 
-    threading.Thread(target=log_output, args=(rnsd_proc,)).start()
+    threading.Thread(target=log_output, args=(rnsd_proc,), daemon=True).start()
 
     return rnsd_proc
 
@@ -187,7 +190,7 @@ def start_rngit_server(config_dir: str, server_repo: str, client_hexhash: str) -
                 break
 
             print(f"SERVER: {line.rstrip()}")
-            match = re.search(r"\[INFO\] Destination: <([a-f0-9]+)>", line)
+            match = re.search(r"\[INFO\] Destination: <([A-Fa-f0-9]+)>", line)
             if match:
                 dest_hash = match.group(1)
                 break
