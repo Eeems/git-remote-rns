@@ -1,0 +1,5 @@
+reviews:
+  profile: assertive
+  path_filters:
+    - "!fuzz/corpus/**"
+    - "!.gitignore"
