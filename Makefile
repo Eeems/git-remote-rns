@@ -94,7 +94,7 @@ requirements-test: requirements-web $(VENV_BIN_ACTIVATE) pyproject.toml ## Insta
 	  ".[test]"
 
 .PHONY: requirements-fuzz
-requirements-fuzz: requirements-web $(VENV_BIN_ACTIVATE) pyproject.toml ## Install test requirements
+requirements-fuzz: requirements-web $(VENV_BIN_ACTIVATE) pyproject.toml ## Install fuzz requirements
 	@. ${VENV_BIN_ACTIVATE}; \
 	python -m pip install \
 	  --quiet \
