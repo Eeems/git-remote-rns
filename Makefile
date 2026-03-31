@@ -216,7 +216,7 @@ $(foreach T,\
 )
 endif
 define fuzz-target
-.PHONY: $2
+.PHONY: $1
 $1: requirements-fuzz
 	@. $${VENV_BIN_ACTIVATE}; \
 	cd fuzz; \
