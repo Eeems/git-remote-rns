@@ -185,7 +185,8 @@ list-tests: ## List all available tests
 	| xargs -n1
 
 .PHONY: list-fuzzers
-list-fuzzers:
+list-fuzzers: ## List all available fuzzers
+	`@echo` $(FUZZERS) | xargs -n1
 	@echo $(FUZZERS) | xargs -n1
 
 ifndef SKIP_TESTS
