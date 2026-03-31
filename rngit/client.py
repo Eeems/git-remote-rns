@@ -233,7 +233,7 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
             if not line:
                 continue
 
-            log.debug("STDIN %s", line.encode())
+            log.debug("STDIN %s", line.encode(errors="replace"))
 
             parts = cast(list[str], line.split(maxsplit=1))
             assert isinstance(parts, list)
