@@ -15,17 +15,13 @@ from contextlib import (
     redirect_stderr,
     redirect_stdout,
 )
-from typing import (
-    IO,
-    cast,
-)
+from typing import cast
 
 import atheris
 import RNS
 
 with atheris.instrument_imports():
     from rngit import client  # pyright: ignore[reportImplicitRelativeImport]
-    from rngit._compat import override
     from rngit.shared import (  # pyright: ignore[reportImplicitRelativeImport]
         BytesIOWrapper,
         ExitCodes,

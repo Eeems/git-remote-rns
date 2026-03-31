@@ -101,9 +101,9 @@ class BytesIOWrapper(io.BufferedWriter):
         buffer: IO[str],
         encoding: str | None = None,
         errors: str | None = None,
-        **kwargs,
+        buffer_size: int = 131072,
     ):
-        super().__init__(buffer, **kwargs)
+        super().__init__(buffer, buffer_size=buffer_size)  # pyright: ignore[reportArgumentType]
         self.encoding: str = encoding or getattr(buffer, "encoding", None) or "utf-8"
         self.errors: str = errors or getattr(buffer, "errors", None) or "strict"
 
