@@ -41,6 +41,10 @@ Issues = "https://github.com/Eeems/git-remote-rns/issues"
 test = [
     "pytest",
 ]
+fuzz = [
+    "atheris",
+]
+
 dev = [
     'basedpyright',
     "bandit",
@@ -83,7 +87,7 @@ ignore-paths = [
     "build/",
     "rngit/__whitelist.py",
     "tests/__whitelist.py",
-    ".repos/"
+    ".repos/",
 ]
 
 [tool.pylint."messages control"]

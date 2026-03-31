@@ -7,10 +7,16 @@ OBJ := $(shell find rngit -type f)
 OBJ += pyproject.toml
 OBJ += README.md
 
+ifndef FUZZ_TIMEOUT
+FUZZ_TIMEOUT := 60
+endif
+
 ifndef SKIP_TESTS
 TESTS := $(shell find tests -type f -name '*.py')
 INDIVIDUAL_TESTS := $(shell SKIP_TESTS=1 MAKEFLAGS= make --no-print-directory list-tests)
 endif
+
+FUZZERS := $(shell find fuzz -maxdepth 1 -type f -name '*.py')
 
 ifeq ($(VENV_BIN_ACTIVATE),)
 VENV_BIN_ACTIVATE := .venv/bin/activate
@@ -80,12 +86,20 @@ requirements-dev: $(VENV_BIN_ACTIVATE) pyproject.toml ## Install dev requirement
 	  ".[dev]"
 
 .PHONY: requirements-test
-requirements-test: requirements-web ## Install test requirements
+requirements-test: requirements-web $(VENV_BIN_ACTIVATE) pyproject.toml ## Install test requirements
 	@. ${VENV_BIN_ACTIVATE}; \
 	python -m pip install \
 	  --quiet \
 	  --editable \
 	  ".[test]"
+
+.PHONY: requirements-fuzz
+requirements-fuzz: requirements-web $(VENV_BIN_ACTIVATE) pyproject.toml ## Install fuzz requirements
+	@. ${VENV_BIN_ACTIVATE}; \
+	python -m pip install \
+	  --quiet \
+	  --editable \
+	  ".[fuzz]"
 
 .PHONY: test
 test: requirements-test ## Run tests
@@ -93,6 +107,9 @@ test: requirements-test ## Run tests
 	python -m pytest \
 	  -vv \
 	  tests/
+
+.PHONY: fuzz
+fuzz: $(FUZZERS) ## Run fuzz tests
 
 .repos:
 	mkdir -p .repos
@@ -167,6 +184,10 @@ list-tests: ## List all available tests
 	| grep -v ' tests collected in ' \
 	| xargs -n1
 
+.PHONY: list-fuzzers
+list-fuzzers: ## List all available fuzzers
+	@echo $(FUZZERS) | xargs -n1
+
 ifndef SKIP_TESTS
 define test-target
 .PHONY: $2
@@ -194,6 +215,22 @@ $(foreach T,\
 	))\
 )
 endif
+define fuzz-target
+.PHONY: $1
+$1: requirements-fuzz
+	@. $${VENV_BIN_ACTIVATE}; \
+	cd fuzz; \
+	python $2 \
+	  -rss_limit_mb=2048 \
+	  -max_total_time=$$(FUZZ_TIMEOUT)
+endef
+$(foreach T,\
+	$(FUZZERS),\
+	$(eval $(call fuzz-target,\
+		$(T),\
+		$(shell basename $(T)),\
+	))\
+)
 
 .PHONY: build
 build: sdist wheel ## Build wheel and sdist
@@ -233,7 +270,7 @@ whitelist: requirements-dev ## Generate lint whitelists
 
 
 .PHONY: lint
-lint: requirements-dev requirements-web requirements-test ## Lint the codebase
+lint: requirements-dev requirements-web requirements-test requirements-fuzz ## Lint the codebase
 	@set -e;\
 	. ${VENV_BIN_ACTIVATE}; \
 	runtool() { \
@@ -259,7 +296,7 @@ lint: requirements-dev requirements-web requirements-test ## Lint the codebase
 	  done; \
 	done; \
 	runtool bandit --recursive --configfile pyproject.toml .; \
-	runtool dodgy --zero-exit; \
+	runtool dodgy --zero-exit --ignore-paths dist/ build/ .venv/ .repos/; \
 	runtool pyroma .
 
 .PHONY: review

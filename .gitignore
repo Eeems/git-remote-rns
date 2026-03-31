@@ -47,3 +47,9 @@ Thumbs.db
 .pytest_cache/
 wheelhouse/
 .repos/
+fuzz/crash-*
+fuzz/oom-*
+fuzz/timeout-*
+fuzz/slow-unit-*
+fuzz/corpus/fuzz_application/seed/
+fuzz/corpus/fuzz_integration/seed/

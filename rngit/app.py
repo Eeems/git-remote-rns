@@ -3,6 +3,7 @@ import inspect
 import json
 import logging
 import os
+import shlex
 import threading
 import time
 import traceback
@@ -344,11 +345,19 @@ class Application:
 
                 stacktrace += f"\nstderr: {stderr}"
 
+            if not exception.cmd:  # pyright: ignore[reportAny]
+                cmd = "?"
+
             if isinstance(exception.cmd, list):  # pyright: ignore[reportAny]
                 cmd = cast(str | bytes, exception.cmd[0])
 
             else:
-                cmd = cast(str | bytes, exception.cmd).split()[0]
+                cmd = exception.cmd  # pyright: ignore[reportAny]
+
+            if isinstance(cmd, bytes):
+                cmd = cmd.decode()
+
+            cmd = shlex.split(shlex.quote(cmd))[0]
 
             if isinstance(cmd, bytes):
                 cmd = cmd.decode()
