@@ -207,11 +207,12 @@ exec -a rnsd /usr/local/bin/rnsd -vvv
             cmd = [
                 "docker",
                 "exec",
-                "-i",
+                "--interactive",
+                "--workdir=/data",
+                "--environment=RNS_CONFIG_PATH=/config",
                 client_container_id,
                 "git-remote-rns",
                 "--verbose",
-                "--identity=/config/identity",
                 "origin",
                 hash_from_server,
             ]
