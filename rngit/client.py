@@ -1,14 +1,20 @@
 # pylint: disable=R0801
 import argparse
+import io
 import logging
 import os
+import selectors
 import subprocess
 import sys
 import threading
 import traceback
 from collections.abc import Sequence
 from tempfile import TemporaryDirectory
-from typing import IO
+from typing import (
+    IO,
+    Callable,
+    cast,
+)
 
 import RNS
 
@@ -33,9 +39,64 @@ _identity: RNS.Identity | None = None
 _repo_path: str | None = None
 
 
-def log_and_stdout(msg: str):
+def git(
+    *args: str,
+    stdout: IO[bytes] | int | None = None,
+    stderr: IO[bytes] | int | None = None,
+) -> None:
+    cmd = ["git", *args]
+    process = subprocess.Popen(  # nosec B607 B603 # pylint: disable=R1732
+        cmd,
+        stdout=subprocess.PIPE if isinstance(stdout, io.IOBase) else stdout,
+        stderr=subprocess.PIPE if isinstance(stderr, io.IOBase) else stderr,
+        text=False,
+    )
+
+    with selectors.DefaultSelector() as selector:
+
+        def wrap(
+            stream: IO[bytes] | None,
+            output: IO[bytes] | int | None,
+        ):
+            if stream is None or not isinstance(output, io.IOBase):
+                return None
+
+            def fn(stream: IO[bytes]):
+                _ = output.write(stream.readline())
+
+            _ = selector.register(stream, selectors.EVENT_READ, fn)
+
+        def flush(stream: IO[bytes] | None, output: IO[bytes] | int | None):
+            if stream is None or not isinstance(output, io.IOBase):
+                return
+
+            while True:
+                line = stream.readline()
+                if not line:
+                    break
+
+                _ = output.write(line)
+
+        wrap(process.stdout, stdout)
+        wrap(process.stderr, stderr)
+        if process.stdout is not None or process.stderr is not None:
+            while process.poll() is None:
+                events = selector.select()
+                for key, _ in events:
+                    fn = cast(Callable[[IO[bytes]], None], key.data)
+                    stream = cast(IO[bytes], key.fileobj)
+                    fn(stream)
+
+    returncode = process.wait()
+    flush(process.stdout, stdout)
+    flush(process.stderr, stderr)
+    if returncode:
+        raise subprocess.CalledProcessError(returncode, cmd)
+
+
+def log_and_stdout(stdout: IO[bytes], msg: str):
     log.debug(msg)
-    _ = sys.stdout.write(msg)
+    _ = stdout.write(msg.encode())
 
 
 def on_link_established(link: RNS.Link):
@@ -207,7 +268,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     _identity = identity
 
     try:
-        stdin_loop(destination, sys.stdin)
+        stdin_loop(destination, sys.stdin, sys.stdout.buffer, sys.stderr.buffer)
 
     except ClientException as e:
         log.error(e)
@@ -234,7 +295,9 @@ class ClientException(Exception):
         self.exitcode: ExitCodes = exitcode
 
 
-def stdin_loop(destination: bytes, stdin: IO[str]) -> None:  # noqa: MC0001
+def stdin_loop(
+    destination: bytes, stdin: IO[str], stdout: IO[bytes], stderr: IO[bytes]
+) -> None:  # noqa: MC0001
     if not RNS.Transport.has_path(destination):  # pyright: ignore[reportUnknownMemberType]
         RNS.Transport.request_path(destination)  # pyright: ignore[reportUnknownMemberType]
         if not RNS.Transport.await_path(destination, 30):  # pyright: ignore[reportUnknownMemberType]
@@ -284,11 +347,14 @@ def stdin_loop(destination: bytes, stdin: IO[str]) -> None:  # noqa: MC0001
                         if err is not None:
                             _ = sys.stderr.write(err)
                             _ = sys.stderr.write("\n")
-                            log_and_stdout(f"error {remote_ref} {c_style_quote(err)}\n")
+                            log_and_stdout(
+                                stdout,
+                                f"error {remote_ref} {c_style_quote(err)}\n",
+                            )
 
                         else:
                             assert not data
-                            log_and_stdout(f"ok {remote_ref}\n")
+                            log_and_stdout(stdout, f"ok {remote_ref}\n")
 
                         if data:
                             _ = sys.stderr.buffer.write(data)
@@ -297,15 +363,14 @@ def stdin_loop(destination: bytes, stdin: IO[str]) -> None:  # noqa: MC0001
                     else:
                         with TemporaryDirectory() as tmpdir:
                             bundle = os.path.join(tmpdir, "bundle")
-                            _ = subprocess.check_call(  # nosec B607 B603
-                                [
-                                    "git",
-                                    "bundle",
-                                    "create",
-                                    "--progress",
-                                    bundle,
-                                    local_ref,
-                                ]
+                            git(
+                                "bundle",
+                                "create",
+                                "--progress",
+                                bundle,
+                                local_ref,
+                                stdout=stdout,
+                                stderr=stderr,
                             )
                             with open(bundle, "rb") as f:
                                 data = f.read()
@@ -317,12 +382,13 @@ def stdin_loop(destination: bytes, stdin: IO[str]) -> None:  # noqa: MC0001
                             )
                             if err is not None:
                                 log_and_stdout(
-                                    f"error {remote_ref} {c_style_quote(err)}\n"
+                                    stdout,
+                                    f"error {remote_ref} {c_style_quote(err)}\n",
                                 )
 
                             else:
                                 assert not data, f"Unexpected data: {data}"
-                                log_and_stdout(f"ok {remote_ref}\n")
+                                log_and_stdout(stdout, f"ok {remote_ref}\n")
 
                 while fetch_queue:
                     sha, ref = fetch_queue.pop(0)
@@ -338,27 +404,29 @@ def stdin_loop(destination: bytes, stdin: IO[str]) -> None:  # noqa: MC0001
                         with open(bundle, "wb") as f:
                             _ = f.write(data)
 
-                        _ = subprocess.check_call(  # nosec B607 B603
-                            ["git", "bundle", "verify", "--quiet", bundle],
+                        git(
+                            "bundle",
+                            "verify",
+                            "--quiet",
+                            bundle,
                             stderr=subprocess.DEVNULL,
+                            stdout=stdout,
                         )
-                        _ = subprocess.check_call(  # nosec B607 B603
-                            [
-                                "git",
-                                "bundle",
-                                "unbundle",
-                                "--progress",
-                                bundle,
-                                ref,
-                            ],
+                        git(
+                            "bundle",
+                            "unbundle",
+                            "--progress",
+                            bundle,
+                            ref,
                             stdout=subprocess.DEVNULL,
+                            stderr=stderr,
                         )
 
-                _ = sys.stderr.flush()
+                _ = stderr.flush()
                 log.debug("Finished batch processing")
-                _ = sys.stdout.write("\n")
+                _ = stdout.write(b"\n")
                 try:
-                    _ = sys.stdout.flush()
+                    _ = stdout.flush()
 
                 except BrokenPipeError:
                     log.error(
@@ -371,11 +439,11 @@ def stdin_loop(destination: bytes, stdin: IO[str]) -> None:  # noqa: MC0001
             match parts[0]:
                 case "capabilities":
                     log.debug("CAPABILITIES")
-                    _ = sys.stdout.write("list\n")
-                    _ = sys.stdout.write("fetch\n")
-                    _ = sys.stdout.write("push\n")
-                    _ = sys.stdout.write("\n")
-                    _ = sys.stdout.flush()
+                    _ = stdout.write(b"list\n")
+                    _ = stdout.write(b"fetch\n")
+                    _ = stdout.write(b"push\n")
+                    _ = stdout.write(b"\n")
+                    _ = stdout.flush()
 
                 case "fetch":
                     push_queue.clear()
@@ -397,17 +465,17 @@ def stdin_loop(destination: bytes, stdin: IO[str]) -> None:  # noqa: MC0001
 
                     err, data = request(link, path)
                     if err is not None:
-                        _ = sys.stderr.write(err)
-                        _ = sys.stderr.write("\n")
+                        _ = stderr.write(err.encode())
+                        _ = stderr.write(b"\n")
                         raise ClientException(ExitCodes.REMOTE_ERROR, "Remote error")
 
                     assert data is not None
-                    _ = sys.stdout.buffer.write(data)
-                    _ = sys.stdout.write("\n")
-                    _ = sys.stdout.flush()
+                    _ = stdout.write(data)
+                    _ = stdout.write(b"\n")
+                    _ = stdout.flush()
 
                 case _:
-                    _ = sys.stderr.write(f"Unknown command: {parts[0]}\n")
+                    _ = stderr.write(f"Unknown command: {parts[0]}\n".encode())
                     raise ClientException(
                         ExitCodes.UNKNOWN_COMMAND, f"Unknown command: {parts[0]}"
                     )

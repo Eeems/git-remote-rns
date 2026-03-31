@@ -13,9 +13,12 @@ import tempfile
 import threading
 import time
 from contextlib import redirect_stderr, redirect_stdout
+from typing import IO, cast
 
 import atheris
 import RNS
+
+from rngit._compat import override
 
 with atheris.instrument_imports():
     from rngit import client  # pyright: ignore[reportImplicitRelativeImport]
@@ -256,7 +259,28 @@ def cleanup():
 
 configure_logging("fuzz", logging.FATAL)
 
+
+class BytesIOWrapper(io.BufferedWriter):
+    """Wrap a buffered bytes stream over TextIOBase string stream."""
+
+    def __init__(
+        self,
+        buffer: IO[str],
+        encoding: str | None = None,
+        errors: str | None = None,
+        **kwargs,
+    ):
+        super().__init__(buffer, **kwargs)
+        self.encoding: str = encoding or buffer.encoding or "utf-8"
+        self.errors: str = errors or buffer.errors or "strict"
+
+    @override
+    def write(self, data: bytes) -> int:
+        return cast(IO[str], cast(object, self.raw)).write(data.decode())
+
+
 allowed_exit_codes = [x.value for x in ExitCodes if x is not ExitCodes.EXCEPTION]
+
 
 with tempfile.TemporaryDirectory() as temp_dir:
     config_dir = os.path.join(temp_dir, "config")
@@ -326,51 +350,66 @@ with tempfile.TemporaryDirectory() as temp_dir:
         destination = bytes.fromhex(server_hash)
 
         class FuzzedDataProvider(atheris.FuzzedDataProvider):
-            def ConsumeUnicodeNoSurrogates(self, len: int) -> str:
-                return self.ConsumeUnicodeNoSurrogates(len).replace("\0", "?")
+            def ConsumeRef(self) -> str:
+                data = self.ConsumeUnicodeNoSurrogates(30)
+                assert isinstance(data, str)
+                return (
+                    data.replace("\0", "?")
+                    .replace(":", "?")
+                    .replace("\n", "?")
+                    .replace("\r", "?")
+                    .replace("\f", "?")
+                    .replace("\036", "?")
+                    .replace("\025", "?")
+                )
+
+            def ConsumeHex(self, size: int) -> str:
+                data = self.ConsumeBytes(size)
+                assert isinstance(data, bytes)
+                return data.hex()
 
         def TestOneInput(data: bytes) -> None:
             if len(data) < 90:
                 return
 
-            fdp = atheris.FuzzedDataProvider(data)
+            fdp = FuzzedDataProvider(data)
 
             cmd_type = fdp.ConsumeIntInRange(0, 6)
-            command: bytes = [
-                b"capabilities",
-                b"list",
-                b"list for-push",
-                b"fetch",
-                b"push",
-                b"push +",
-                b"push :",
-            ][cmd_type]
-            stdin_data: str
+            command: str = cast(
+                str,
+                [
+                    "capabilities",
+                    "list",
+                    "list for-push",
+                    "fetch",
+                    "push",
+                    "push +",
+                    "push :",
+                ][cmd_type],
+            )
             if cmd_type == 3:
-                sha: bytes = fdp.ConsumeBytes(20).hex().encode()
-                ref: bytes = fdp.ConsumeUnicodeNoSurrogates(30).encode()
-                stdin_data: bytes = (
-                    command + b" " + sha + b" refs/heads/" + ref + b"\n\n"
-                )
+                sha = fdp.ConsumeHex(20)
+                ref = fdp.ConsumeRef()
+                stdin_data = command + " " + sha + " refs/heads/" + ref + "\n\n"
 
             elif cmd_type >= 4:
-                ref1: bytes = fdp.ConsumeUnicodeNoSurrogates(30).encode()
-                ref2: bytes = fdp.ConsumeUnicodeNoSurrogates(30).encode()
-                stdin_data: bytes = (
-                    command + b" refs/heads/" + ref1 + b":refs/heads/" + ref2 + b"\n\n"
+                ref1 = fdp.ConsumeRef()
+                ref2 = fdp.ConsumeRef()
+                stdin_data = (
+                    command + " refs/heads/" + ref1 + ":refs/heads/" + ref2 + "\n\n"
                 )
 
             else:
-                stdin_data: bytes = command + b"\n\n"
+                stdin_data = command + "\n\n"
 
-            with io.StringIO() as output:
+            with io.StringIO() as output, BytesIOWrapper(output) as raw_output:
                 try:
                     with (
-                        io.StringIO(stdin_data.decode()) as stdin_io,
+                        io.StringIO(stdin_data) as stdin_io,
                         redirect_stdout(output),
                         redirect_stderr(output),
                     ):
-                        client.stdin_loop(destination, stdin_io)
+                        client.stdin_loop(destination, stdin_io, raw_output, raw_output)
 
                 except client.ClientException as e:
                     if e.exitcode.value in allowed_exit_codes:
@@ -380,10 +419,6 @@ with tempfile.TemporaryDirectory() as temp_dir:
 
                 except subprocess.CalledProcessError:
                     pass
-
-                except ValueError as e:
-                    if str(e) != "embedded null byte":
-                        raise
 
                 except Exception:
                     print(output.getvalue())
