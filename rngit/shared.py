@@ -108,8 +108,8 @@ class BytesIOWrapper(io.BufferedWriter):
         self.errors: str = errors or getattr(buffer, "errors", None) or "strict"
 
     @override
-    def write(self, data: bytes) -> int:
-        return cast(IO[str], cast(object, self.raw)).write(data.decode())
+    def write(self, buffer: bytes) -> int:
+        return cast(IO[str], cast(object, self.raw)).write(buffer.decode())
 
     @override
     def flush(self):
