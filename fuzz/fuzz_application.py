@@ -37,6 +37,7 @@ if os.path.exists(seed_path) and os.stat(seed_path).st_size < MINIMUM_DATA_SIZE:
 if not os.path.exists(seed_path):
     import struct
 
+    os.makedirs(os.path.join(corpus, "seed"), exist_ok=True)
     with open(seed_path, "wb") as f:
         _ = f.write(b"ce20a22807b4c8354180a1e292f98818")
         _ = f.write(b"/a_really_long_path/that/is_about_50_characters123")

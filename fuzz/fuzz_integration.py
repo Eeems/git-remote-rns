@@ -212,23 +212,23 @@ exec -a rnsd /usr/local/bin/rnsd -vvv
                 hash_from_server,
             ]
             try:
-                proc = subprocess.Popen(
+                with subprocess.Popen(
                     cmd,
                     env={"VERBOSE": "1", **os.environ},
                     stdin=subprocess.PIPE,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
-                )
-                stdout, stderr = proc.communicate(stdin_data)
-                if proc.returncode in ExitCodes:
-                    return
+                ) as proc:
+                    stdout, stderr = proc.communicate(stdin_data)
+                    if proc.returncode in ExitCodes:
+                        return
 
-                print(stdout.decode())
-                print(stderr.decode())
-                print(proc.returncode)
-                raise subprocess.CalledProcessError(
-                    proc.returncode, cmd, stdout, stderr
-                )
+                    print(stdout.decode())
+                    print(stderr.decode())
+                    print(proc.returncode)
+                    raise subprocess.CalledProcessError(
+                        proc.returncode, cmd, stdout, stderr
+                    )
 
             except Exception:
                 print("Client <<EOF")
