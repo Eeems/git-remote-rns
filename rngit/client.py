@@ -63,6 +63,7 @@ def git(
 
             def fn(stream: IO[bytes]):
                 _ = output.write(stream.readline())
+                output.flush()
 
             _ = selector.register(stream, selectors.EVENT_READ, fn)
 
@@ -76,6 +77,7 @@ def git(
                     break
 
                 _ = output.write(line)
+                output.flush()
 
         wrap(process.stdout, stdout)
         wrap(process.stderr, stderr)
