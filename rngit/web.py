@@ -591,7 +591,7 @@ def _(  # pylint: disable=E0102 # noqa: F811
     ]
     content: list[bytes] = []
     for line in (
-        git(repo, "show", "--ignore-all-space", sha, "--", path)
+        git(repo, "show", "--pretty=format:", "--ignore-all-space", sha, "--", path)
         .decode()
         .splitlines(False)
     ):
