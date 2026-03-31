@@ -50,3 +50,4 @@ wheelhouse/
 fuzz/crash-*
 fuzz/oom-*
 fuzz/timeout-*
+fuzz/corpus/fuzz_application/seed/

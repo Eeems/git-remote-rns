@@ -29,6 +29,11 @@ def fn(_request: Request, _int: int, _float: float, _bool: bool) -> None:
 
 corpus = os.path.join("corpus", os.path.splitext(os.path.basename(__file__))[0])
 seed_path = os.path.join(corpus, "seed", "seed0")
+MINIMUM_DATA_SIZE = 107
+if os.path.exists(seed_path) and os.stat(seed_path).st_size < MINIMUM_DATA_SIZE:
+    print("seed0 size mismatch", file=sys.stderr)
+    os.unlink(seed_path)
+
 if not os.path.exists(seed_path):
     import struct
 
@@ -44,7 +49,7 @@ configure_logging("fuzz", logging.FATAL)
 with tempfile.TemporaryDirectory(prefix="rngit_fuzz_") as t:
 
     def TestOneInput(data: bytes) -> None:
-        if len(data) < 107:
+        if len(data) < MINIMUM_DATA_SIZE:
             return
 
         fdp = atheris.FuzzedDataProvider(data)
@@ -69,6 +74,9 @@ with tempfile.TemporaryDirectory(prefix="rngit_fuzz_") as t:
         try:
             parameters = app._get_parameters(fn)  # pyright: ignore[reportPrivateUsage] # pylint: disable=W0212
             request = Request(path, data, hexhash, None, 0.0)
+            _ = path in request
+            _ = request.param(path)  # pyright: ignore[reportAny]
+
             try:
                 params = app._parse_params(request, parameters)  # pyright: ignore[reportPrivateUsage] # pylint: disable=W0212
 
