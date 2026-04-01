@@ -66,7 +66,7 @@ def randomword(length: int) -> str:
 
 
 rnsd_process: subprocess.Popen[bytes] | None = None
-rngit_process: subprocess.Popen[str] | None = None
+rngit_process: subprocess.Popen[bytes] | None = None
 
 
 def start_rnsd(config_dir: str) -> subprocess.Popen[bytes]:
@@ -178,8 +178,6 @@ def start_rngit_server(config_dir: str, server_repo: str, client_hexhash: str) -
         ],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
-        text=True,
-        bufsize=1,
         env={**os.environ, "RNS_CONFIG_PATH": config_dir},
     )
 
@@ -194,12 +192,13 @@ def start_rngit_server(config_dir: str, server_repo: str, client_hexhash: str) -
                 break
 
             print(f"SERVER: {line.rstrip()}")
-            match = re.search(r"\[INFO\] Destination: <([A-Fa-f0-9]+)>", line)
+            text = line.decode(errors="replace")
+            match = re.search(r"\[INFO\] Destination: <([A-Fa-f0-9]+)>", text)
             if match:
                 dest_hash = match.group(1)
                 break
 
-            if "error" in line.lower():
+            if "error" in text.lower():
                 raise RuntimeError(f"Server error: {line}")
         else:
             break
@@ -420,12 +419,20 @@ with tempfile.TemporaryDirectory() as temp_dir:
     except Exception:
         print("rnsd output <<EOF")
         if rnsd_process is not None and rnsd_process.stdout is not None:
+            if rnsd_process.poll() is None:  # pyright: ignore[reportUnreachable]
+                rnsd_process.terminate()  # pyright: ignore[reportUnreachable]
+                _ = rnsd_process.wait()
+
             print(rnsd_process.stdout.read().decode(errors="replace"))
 
         print("EOF")
 
         print("rngit output <<EOF")
         if rngit_process is not None and rngit_process.stdout is not None:
+            if rngit_process.poll() is None:  # pyright: ignore[reportUnreachable]
+                rngit_process.terminate()  # pyright: ignore[reportUnreachable]
+                _ = rngit_process.wait()
+
             print(rngit_process.stdout.read())
 
         print("EOF")
