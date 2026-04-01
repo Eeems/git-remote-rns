@@ -242,6 +242,7 @@ def cleanup() -> None:
         except subprocess.TimeoutExpired:
             rngit_process.kill()
             _ = rngit_process.wait()
+
         rngit_process = None
 
     if rnsd_process is not None:
@@ -251,6 +252,7 @@ def cleanup() -> None:
         except subprocess.TimeoutExpired:
             rnsd_process.kill()
             _ = rnsd_process.wait()
+
         rnsd_process = None
 
 
@@ -422,33 +424,19 @@ with tempfile.TemporaryDirectory() as temp_dir:
         atheris.Fuzz()
 
     except Exception:
-        print("rnsd output <<EOF")
-        if rnsd_process is not None and rnsd_process.stdout is not None:
-            if rnsd_process.poll() is None:  # pyright: ignore[reportUnreachable]
-                rnsd_process.terminate()  # pyright: ignore[reportUnreachable]
-                _ = rnsd_process.wait(5)
+        # Processes may not be stopped yet, but we don't care,
+        # as we only care about the output leading up to the crash,
+        rnsd_stdout = rnsd_process.stdout if rnsd_process is not None else None
+        if rnsd_stdout is not None:
+            print("rnsd output <<EOF")
+            print(rnsd_stdout.read().decode(errors="replace"))
+            print("EOF")
 
-            if rnsd_process.poll() is None:
-                rnsd_process.kill()  # pyright: ignore[reportUnreachable]
-                _ = rnsd_process.wait()
-
-            print(rnsd_process.stdout.read().decode(errors="replace"))
-
-        print("EOF")
-
-        print("rngit output <<EOF")
-        if rngit_process is not None and rngit_process.stdout is not None:
-            if rngit_process.poll() is None:  # pyright: ignore[reportUnreachable]
-                rngit_process.terminate()  # pyright: ignore[reportUnreachable]
-                _ = rngit_process.wait(5)
-
-            if rngit_process.poll() is None:
-                rngit_process.kill()  # pyright: ignore[reportUnreachable]
-                _ = rngit_process.wait()
-
-            print(rngit_process.stdout.read())
-
-        print("EOF")
+        rngit_stdout = rngit_process.stdout if rngit_process is not None else None
+        if rngit_stdout is not None:
+            print("rngit output <<EOF")
+            print(rngit_stdout.read())
+            print("EOF")
 
         raise
 
