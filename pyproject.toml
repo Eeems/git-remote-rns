@@ -76,6 +76,7 @@ packages = ["rngit"]
 
 [tool.ruff]
 exclude = [".venv", "build", "**/__whitelist.py"]
+extend-select = ["UP"]
 
 [tool.pyright]
 exclude = [".venv", "build", "**/__whitelist.py"]

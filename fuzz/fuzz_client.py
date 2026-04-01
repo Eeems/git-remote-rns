@@ -45,6 +45,20 @@ RETICULUM_CONFIG = """
 """
 
 
+def log_all_output(proc: subprocess.Popen[bytes]):
+    while proc.poll() is None:
+        try:
+            if not proc.stdout:
+                continue
+
+            line = proc.stdout.readline()
+            if line:
+                print(line.decode(), end="")
+
+        except Exception as e:
+            print(f"Exception in log_all_output: {e}")
+
+
 def randomword(length: int) -> str:
     letters = string.ascii_lowercase
     return "".join(random.choice(letters) for _ in range(length))
@@ -80,7 +94,7 @@ def start_rnsd(config_dir: str) -> subprocess.Popen[bytes]:  # pylint: disable=W
     remaining = tries
     last_rnstatus_output = ""
     while True:
-        if rnsd_proc.returncode is not None:
+        if rnsd_proc.poll() is not None:
             stdout = rnsd_proc.stdout.read().decode() if rnsd_proc.stdout else ""
             raise RuntimeError(
                 f"rnsd exited early: {rnsd_proc.returncode}\n  stdout: {stdout}"
@@ -137,18 +151,7 @@ def start_rnsd(config_dir: str) -> subprocess.Popen[bytes]:  # pylint: disable=W
         )
 
     rnsd_process = rnsd_proc
-
-    def log_output(proc: subprocess.Popen[bytes]):
-        while proc.returncode is None:
-            try:
-                if proc.stdout:
-                    line = proc.stdout.readline()
-                    if line:
-                        print(line.decode(), end="")
-            except Exception as e:
-                print(f"Exception in log_output: {e}")
-
-    threading.Thread(target=log_output, args=(rnsd_proc,), daemon=True).start()
+    threading.Thread(target=log_all_output, args=(rnsd_proc,), daemon=True).start()
 
     return rnsd_proc
 
@@ -224,18 +227,7 @@ def start_rngit_server(config_dir: str, server_repo: str, client_hexhash: str) -
             )
 
     rngit_process = rngit_proc
-
-    def log_output(proc: subprocess.Popen[str]):
-        while proc.returncode is None:
-            for output in (proc.stdout, proc.stderr):
-                if output is None:
-                    continue
-
-                line = output.readline()
-                if line:
-                    print(line, end="")
-
-    threading.Thread(target=log_output, args=(rngit_proc,)).start()
+    threading.Thread(target=log_all_output, args=(rngit_proc,)).start()
     return dest_hash
 
 
