@@ -61,7 +61,7 @@ def git(
             if stream is None or not isinstance(output, io.IOBase):
                 return
 
-            def fn(stream: IO[bytes]):
+            def fn(stream: IO[bytes]) -> None:
                 _ = output.write(stream.readline())
                 output.flush()
 
@@ -272,9 +272,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     global _identity
     _identity = identity
 
+    stdout = BytesIOWrapper(sys.stdout)
+    stderr = BytesIOWrapper(sys.stderr)
     try:
-        with BytesIOWrapper(sys.stdout) as stdout, BytesIOWrapper(sys.stderr) as stderr:
-            stdin_loop(destination, sys.stdin, stdout, stderr)
+        stdin_loop(destination, sys.stdin, stdout, stderr)
 
     except ClientException as e:
         log.exception(e.message)
@@ -291,6 +292,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     except Exception:
         log.exception("Unexpected error")
         return ExitCodes.EXCEPTION.value
+
+    finally:
+        _ = stdout.detach()
+        _ = stderr.detach()
 
     return ExitCodes.SUCCESS.value
 

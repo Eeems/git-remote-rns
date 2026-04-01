@@ -117,5 +117,5 @@ class BytesIOWrapper(io.BufferedWriter):
         return len(buffer)
 
     @override
-    def flush(self):
+    def flush(self) -> None:
         cast(IO[str], cast(object, self.raw)).flush()
