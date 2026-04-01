@@ -286,7 +286,7 @@ with tempfile.TemporaryDirectory() as temp_dir:
         (b"\x01" + b"A" * 89, "list"),
         (b"\x02" + b"A" * 89, "list-for-push"),
         (b"\x03" + b"B" * 20 + b"C" * 30 + b"A" * 39, "fetch"),
-        (b"\x03" + b"\x00" * 20 + b"refs/heads/main" + b"x\00" * 27, "fetch-min"),
+        (b"\x03" + b"\x00" * 20 + b"refs/heads/main" + b"\x00" * 54, "fetch-min"),
         (b"\x04" + b"D" * 30 + b"E" * 30 + b"A" * 29, "push"),
         (b"\x05" + b"F" * 30 + b"G" * 30 + b"A" * 29, "push-force"),
         (b"\x06" + b"H" * 30 + b"I" * 30 + b"A" * 29, "push-delete"),
