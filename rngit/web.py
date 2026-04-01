@@ -606,7 +606,7 @@ def _(  # noqa: F811
     return header(f"diff: {path}", breadcrumbs) + b"\n".join(content)
 
 
-def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
+def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="rngit-web")
     _ = parser.add_argument("repo", help="Path to git repository to serve")
     _ = parser.add_argument(

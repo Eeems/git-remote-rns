@@ -327,7 +327,7 @@ def on_delete_request(
         return b"\1" + str(e).encode()
 
 
-def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
+def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="RNS Git Server", allow_abbrev=False)
     _ = parser.add_argument("repo", help="Path to git repository to serve")
     _ = parser.add_argument(

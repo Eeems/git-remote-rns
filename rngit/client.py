@@ -306,7 +306,7 @@ class ClientException(Exception):
 
 def stdin_loop(
     destination: bytes, stdin: IO[str], stdout: IO[bytes], stderr: IO[bytes]
-) -> None:  # noqa: MC0001
+) -> None:
     if not RNS.Transport.has_path(destination):  # pyright: ignore[reportUnknownMemberType]
         RNS.Transport.request_path(destination)  # pyright: ignore[reportUnknownMemberType]
         if not RNS.Transport.await_path(destination, 30):  # pyright: ignore[reportUnknownMemberType]
