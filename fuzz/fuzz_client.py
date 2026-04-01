@@ -276,6 +276,8 @@ with tempfile.TemporaryDirectory() as temp_dir:
 
     print(f"Client identity: {client_identity}")
 
+    MINIMUM_DATA_SIZE = 90
+
     corpus = os.path.join("corpus", os.path.splitext(os.path.basename(__file__))[0])
     seed_dir = os.path.join(corpus, "seed")
     os.makedirs(seed_dir, exist_ok=True)
@@ -284,13 +286,16 @@ with tempfile.TemporaryDirectory() as temp_dir:
         (b"\x01" + b"A" * 89, "list"),
         (b"\x02" + b"A" * 89, "list-for-push"),
         (b"\x03" + b"B" * 20 + b"C" * 30 + b"A" * 39, "fetch"),
-        (b"\x03" + b"\x00" * 20 + b"refs/heads/main", "fetch-min"),
+        (b"\x03" + b"\x00" * 20 + b"refs/heads/main" + b"x\00" * 27, "fetch-min"),
         (b"\x04" + b"D" * 30 + b"E" * 30 + b"A" * 29, "push"),
         (b"\x05" + b"F" * 30 + b"G" * 30 + b"A" * 29, "push-force"),
         (b"\x06" + b"H" * 30 + b"I" * 30 + b"A" * 29, "push-delete"),
     ]:
         seed_path = os.path.join(seed_dir, seed_name)
-        if not os.path.exists(seed_path):
+        if (
+            not os.path.exists(seed_path)
+            or os.stat(seed_path).st_size < MINIMUM_DATA_SIZE
+        ):
             with open(seed_path, "wb") as f:
                 _ = f.write(seed)
 
@@ -348,7 +353,7 @@ with tempfile.TemporaryDirectory() as temp_dir:
                 return data.hex()
 
         def TestOneInput(data: bytes) -> None:
-            if len(data) < 90:
+            if len(data) < MINIMUM_DATA_SIZE:
                 return
 
             fdp = FuzzedDataProvider(data)
@@ -421,6 +426,10 @@ with tempfile.TemporaryDirectory() as temp_dir:
         if rnsd_process is not None and rnsd_process.stdout is not None:
             if rnsd_process.poll() is None:  # pyright: ignore[reportUnreachable]
                 rnsd_process.terminate()  # pyright: ignore[reportUnreachable]
+                _ = rnsd_process.wait(5)
+
+            if rnsd_process.poll() is None:
+                rnsd_process.kill()  # pyright: ignore[reportUnreachable]
                 _ = rnsd_process.wait()
 
             print(rnsd_process.stdout.read().decode(errors="replace"))
@@ -431,6 +440,10 @@ with tempfile.TemporaryDirectory() as temp_dir:
         if rngit_process is not None and rngit_process.stdout is not None:
             if rngit_process.poll() is None:  # pyright: ignore[reportUnreachable]
                 rngit_process.terminate()  # pyright: ignore[reportUnreachable]
+                _ = rngit_process.wait(5)
+
+            if rngit_process.poll() is None:
+                rngit_process.kill()  # pyright: ignore[reportUnreachable]
                 _ = rngit_process.wait()
 
             print(rngit_process.stdout.read())
