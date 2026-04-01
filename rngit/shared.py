@@ -34,7 +34,7 @@ class ExitCodes(Enum):
     CHILD_EXCEPTION = errno.ECHILD
 
 
-def configure_logging(name: str, level: int = logging.WARNING):
+def configure_logging(name: str, level: int = logging.WARNING) -> None:
     while logging.root.handlers:
         logging.root.removeHandler(logging.root.handlers[0])
 

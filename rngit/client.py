@@ -58,7 +58,7 @@ def git(
         def wrap(
             stream: IO[bytes] | None,
             output: IO[bytes] | int | None,
-        ):
+        ) -> None:
             if stream is None or not isinstance(output, io.IOBase):
                 return
 
@@ -68,7 +68,7 @@ def git(
 
             _ = selector.register(stream, selectors.EVENT_READ, fn)
 
-        def flush(stream: IO[bytes] | None, output: IO[bytes] | int | None):
+        def flush(stream: IO[bytes] | None, output: IO[bytes] | int | None) -> None:
             if stream is None or not isinstance(output, io.IOBase):
                 return
 
@@ -100,12 +100,12 @@ def git(
         raise subprocess.CalledProcessError(returncode, cmd)
 
 
-def log_and_stdout(stdout: IO[bytes], msg: str):
+def log_and_stdout(stdout: IO[bytes], msg: str) -> None:
     log.debug(msg)
     _ = stdout.write(msg.encode())
 
 
-def on_link_established(link: RNS.Link):
+def on_link_established(link: RNS.Link) -> None:
     global _identity  # noqa: PLW0602
     assert _identity is not None
     log.debug("ESTABLISHED: %s", link)
@@ -113,13 +113,13 @@ def on_link_established(link: RNS.Link):
     _ = link.identify(_identity)  # pyright: ignore[reportUnknownMemberType]
 
 
-def on_link_closed(link: RNS.Link):
+def on_link_closed(link: RNS.Link) -> None:
     global _linkEvent  # noqa: PLW0602
     log.debug("CLOSED: %s", link)
     _linkEvent.clear()
 
 
-def on_packet(message: bytes, _packet: RNS.Packet):
+def on_packet(message: bytes, _packet: RNS.Packet) -> None:
     global _linkEvent  # noqa: PLW0602
     log.debug("PACKET: %s", message)
     match message:

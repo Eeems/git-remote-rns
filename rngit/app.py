@@ -197,7 +197,7 @@ class Application:
         return self._identity
 
     @identity.setter
-    def identity(self, identity_or_path: str | RNS.Identity | None):  # pyright: ignore[reportPropertyTypeMismatch]
+    def identity(self, identity_or_path: str | RNS.Identity | None) -> None:  # pyright: ignore[reportPropertyTypeMismatch]
         if self._identity is not None:
             raise ValueError("Identity already set")
 
@@ -295,7 +295,7 @@ class Application:
         self,
         identity_or_hexhash_or_special: RNS.Identity | str | SpecialPermissions,
         permission: str,
-    ):
+    ) -> None:
         if isinstance(identity_or_hexhash_or_special, SpecialPermissions):
             hexhash = identity_or_hexhash_or_special.value
 

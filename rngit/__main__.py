@@ -1,19 +1,20 @@
 import sys
+from typing import NoReturn
 
 
-def client():
+def client() -> NoReturn:
     from .client import main as _client  # noqa: PLC0415
 
     sys.exit(_client())
 
 
-def server():
+def server() -> NoReturn:
     from .server import main as _server  # noqa: PLC0415
 
     sys.exit(_server())
 
 
-def web():
+def web() -> NoReturn:
     from .web import main as _web  # noqa: PLC0415
 
     sys.exit(_web())

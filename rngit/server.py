@@ -29,11 +29,11 @@ _write_list: set[str] = set()
 _read_list: set[str] | None = set()
 
 
-def on_link_closed(link: RNS.Link):
+def on_link_closed(link: RNS.Link) -> None:
     log.debug("CLOSED: %s %s", link, link.get_remote_identity())  # pyright: ignore[reportUnknownArgumentType]
 
 
-def on_link_established(link: RNS.Link):
+def on_link_established(link: RNS.Link) -> None:
     try:
         log.debug("ESTABLISHED: %s", link)
         link.set_link_closed_callback(on_link_closed)  # pyright: ignore[reportUnknownMemberType]
@@ -44,7 +44,7 @@ def on_link_established(link: RNS.Link):
         raise
 
 
-def on_identified(link: RNS.Link, identity: RNS.Identity):
+def on_identified(link: RNS.Link, identity: RNS.Identity) -> None:
     try:
         assert link.get_remote_identity() == identity
         _ = RNS.Packet(link, packets.PACKET_IDENTIFIED.value).send()
@@ -126,7 +126,7 @@ def request_repo_path(data: bytes) -> tuple[str | None, tuple[str, bytes] | None
         return str(e), None
 
 
-def log_request(path: str, repo_path: str, *args: object):
+def log_request(path: str, repo_path: str, *args: object) -> None:
     global _repo_path  # noqa: PLW0602
     repo_path = os.path.relpath(repo_path, _repo_path)
     log.debug("REQUEST %s %s %s", path, repo_path, " ".join(f"{f}" for f in args))
@@ -292,7 +292,7 @@ def on_delete_request(
     _request_id: bytes,
     remote_identity: RNS.Identity | None,
     _request_at: float,
-):
+) -> bytes:
     try:
         err = write_allowed_error(remote_identity)
         if err is not None:
