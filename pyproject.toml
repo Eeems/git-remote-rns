@@ -47,7 +47,6 @@ fuzz = [
 
 dev = [
     'basedpyright',
-    "bandit",
     "dodgy",
     "pyroma",
     "ruff",
@@ -80,6 +79,8 @@ exclude = [".venv", "build", "**/__whitelist.py"]
 extend-select = [
     "UP",
     "PL",
+    "ANN",
+    "S",
 ]
 ignore = [
     "PLW0603",
@@ -87,6 +88,13 @@ ignore = [
     "PLR0915",
     "PLR0912",
     "PLR0911",
+    "S101",
+    "S404",
+    "S603",
+    "S607",
+    "ANN401",
+    "ANN001",
+    "ANN003",
 ]
 
 [tool.pyright]
@@ -105,19 +113,4 @@ exclude = [
     ".venv/",
     "build/",
     ".repos/",
-]
-
-[tool.bandit]
-exclude_dirs = [
-    ".venv/",
-    "build/",
-    "**/__whitelist.py",
-    ".*/"
-]
-skips = [
-    'B101',
-    'B404',
-    "B603",
-    "B607",
-    "B311",
 ]

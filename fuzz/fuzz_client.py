@@ -46,7 +46,7 @@ RETICULUM_CONFIG = """
 """
 
 
-def log_all_output(proc: subprocess.Popen[bytes]):
+def log_all_output(proc: subprocess.Popen[bytes]) -> None:
     while proc.poll() is None:
         try:
             if not proc.stdout:
@@ -62,7 +62,7 @@ def log_all_output(proc: subprocess.Popen[bytes]):
 
 def randomword(length: int) -> str:
     letters = string.ascii_lowercase
-    return "".join(random.choice(letters) for _ in range(length))
+    return "".join(random.choice(letters) for _ in range(length)) # noqa: S311
 
 
 rnsd_process: subprocess.Popen[bytes] | None = None
@@ -232,7 +232,7 @@ def start_rngit_server(config_dir: str, server_repo: str, client_hexhash: str) -
     return dest_hash
 
 
-def cleanup():
+def cleanup() -> None:
     global rnsd_process, rngit_process
     print("Cleaning up...")
 

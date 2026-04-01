@@ -1,4 +1,5 @@
 import atexit
+from collections.abc import Generator
 import os
 import pathlib
 import random
@@ -12,6 +13,7 @@ import tempfile
 import threading
 import time
 from pathlib import Path
+from typing import Any
 
 import pytest
 import RNS
@@ -23,7 +25,7 @@ class SetupError(RuntimeError):
 
 def randomword(length: int) -> str:
     letters = string.ascii_lowercase
-    return "".join(random.choice(letters) for _ in range(length))
+    return "".join(random.choice(letters) for _ in range(length)) # noqa: S311
 
 
 RETICULUM_CONFIG = f"""
@@ -46,7 +48,7 @@ _rnsd_config_dir: Path | None = None
 
 
 @pytest.fixture(scope="session", autouse=True)
-def shared_rnsd():
+def shared_rnsd() -> Generator[Path, Any, None]:  # pyright: ignore[reportExplicitAny]
     global _rnsd_process
     global _rnsd_config_dir
     config_dir = Path(tempfile.mkdtemp())
@@ -143,7 +145,7 @@ def shared_rnsd():
 
 
 class IntegrationStack:
-    def __init__(self, rns_config: Path, server_repo: Path):
+    def __init__(self, rns_config: Path, server_repo: Path) -> None:
         self.rns_config: Path = rns_config
         self.server_repo: Path = server_repo
         self.server_proc: subprocess.Popen[str] | None = None
@@ -159,7 +161,7 @@ class IntegrationStack:
         allow_all_read: bool = False,
         allow_read: list[str] | None = None,
         allow_write: list[str] | None = None,
-    ):
+    ) -> None:
         args = [
             sys.executable,
             "-m",
@@ -239,7 +241,7 @@ class IntegrationStack:
                     + f"{self.server_proc.stdout.read() if self.server_proc.stdout else ''}"
                 )
 
-        def fn(proc: subprocess.Popen[str]):
+        def fn(proc: subprocess.Popen[str]) -> None:
             while proc.poll() is None:
                 for f in (proc.stdout, proc.stderr):
                     if f is None:

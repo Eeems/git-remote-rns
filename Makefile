@@ -294,7 +294,6 @@ lint: requirements-dev requirements-web requirements-test requirements-fuzz ## L
 	    runtool "$$tool" "$$dir"; \
 	  done; \
 	done; \
-	runtool bandit --recursive --configfile pyproject.toml .; \
 	runtool dodgy --zero-exit --ignore-paths dist/ build/ .venv/ .repos/; \
 	runtool pyroma .
 
