@@ -106,7 +106,7 @@ def log_and_stdout(stdout: IO[bytes], msg: str):
 
 
 def on_link_established(link: RNS.Link):
-    global _identity  # noqa: F999,PLW0602
+    global _identity  # noqa: PLW0602
     assert _identity is not None
     log.debug("ESTABLISHED: %s", link)
     link.set_packet_callback(on_packet)  # pyright: ignore[reportUnknownMemberType]
@@ -114,13 +114,13 @@ def on_link_established(link: RNS.Link):
 
 
 def on_link_closed(link: RNS.Link):
-    global _linkEvent  # noqa: F999,PLW0602
+    global _linkEvent  # noqa: PLW0602
     log.debug("CLOSED: %s", link)
     _linkEvent.clear()
 
 
 def on_packet(message: bytes, _packet: RNS.Packet):
-    global _linkEvent  # noqa: F999,PLW0602
+    global _linkEvent  # noqa: PLW0602
     log.debug("PACKET: %s", message)
     match message:
         case packets.PACKET_IDENTIFIED.value:
@@ -133,7 +133,7 @@ def on_packet(message: bytes, _packet: RNS.Packet):
 def request(
     link: RNS.Link, path: str, data: bytes = b""
 ) -> tuple[str | None, bytes | None]:
-    global _repo_path  # noqa: F999,PLW0602
+    global _repo_path  # noqa: PLW0602
     assert _repo_path is not None
     event = threading.Event()
     log.debug("REQUEST %s", path)
@@ -294,10 +294,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         log.exception("Unexpected error")
         return ExitCodes.EXCEPTION.value
 
-    finally:
-        _ = stdout.detach()
-        _ = stderr.detach()
-
     return ExitCodes.SUCCESS.value
 
 
@@ -329,7 +325,7 @@ def stdin_loop(
     link = RNS.Link(server_destination, on_link_established, on_link_closed)
     push_queue: list[tuple[str, str]] = []
     fetch_queue: list[tuple[str, str]] = []
-    global _linkEvent  # noqa: F999,PLW0602
+    global _linkEvent  # noqa: PLW0602
     try:
         for line in stdin:
             _ = _linkEvent.wait()

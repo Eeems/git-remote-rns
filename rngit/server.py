@@ -68,7 +68,7 @@ def identity_allowed_error(
 
 
 def read_allowed_error(identity: RNS.Identity | None) -> str | None:
-    global _read_list  # noqa: F999,PLW0602
+    global _read_list  # noqa: PLW0602
     if _read_list is None:
         return None
 
@@ -76,12 +76,12 @@ def read_allowed_error(identity: RNS.Identity | None) -> str | None:
 
 
 def write_allowed_error(identity: RNS.Identity | None) -> str | None:
-    global _write_list  # noqa: F999,PLW0602
+    global _write_list  # noqa: PLW0602
     return identity_allowed_error(identity, _write_list)
 
 
 def request_repo_path(data: bytes) -> tuple[str | None, tuple[str, bytes] | None]:
-    global _repo_path  # noqa: F999,PLW0602
+    global _repo_path  # noqa: PLW0602
     try:
         assert isinstance(data, bytes), "data must be bytes"
         assert _repo_path is not None, "_repo_path not set"
@@ -127,7 +127,7 @@ def request_repo_path(data: bytes) -> tuple[str | None, tuple[str, bytes] | None
 
 
 def log_request(path: str, repo_path: str, *args: object):
-    global _repo_path  # noqa: F999,PLW0602
+    global _repo_path  # noqa: PLW0602
     repo_path = os.path.relpath(repo_path, _repo_path)
     log.debug("REQUEST %s %s %s", path, repo_path, " ".join(f"{f}" for f in args))
 
