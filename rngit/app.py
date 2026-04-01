@@ -100,7 +100,7 @@ FileHandler = Callable[..., FileResponse | None]
 
 # Hack to allow returning "Not found" errors for pages without handlers"
 class RequestHandlers(defaultdict):  # pyright: ignore[reportMissingTypeArgument]
-    def __init__(self, app: "Application")->None:
+    def __init__(self, app: "Application") -> None:
         super().__init__()  # pyright: ignore[reportUnknownMemberType]
         self._default: HandlerRegistration = (
             "?",
@@ -558,6 +558,7 @@ class Application:
             target=self._request_thread,  # pyright: ignore[reportUnknownArgumentType, reportUnknownMemberType]
             args=(fn, request, response),
             kwargs=params,
+            daemon=True,
         )
         thread.start()
         thread.join(timeout)

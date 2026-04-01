@@ -1,5 +1,4 @@
 import atexit
-from collections.abc import Generator
 import os
 import pathlib
 import random
@@ -12,6 +11,7 @@ import sys
 import tempfile
 import threading
 import time
+from collections.abc import Generator
 from pathlib import Path
 from typing import Any
 
@@ -25,7 +25,7 @@ class SetupError(RuntimeError):
 
 def randomword(length: int) -> str:
     letters = string.ascii_lowercase
-    return "".join(random.choice(letters) for _ in range(length)) # noqa: S311
+    return "".join(random.choice(letters) for _ in range(length))  # noqa: S311
 
 
 RETICULUM_CONFIG = f"""
@@ -251,7 +251,7 @@ class IntegrationStack:
                     if line:
                         print(line, file=sys.stderr, end="")
 
-        threading.Thread(target=fn, args=(self.server_proc,)).start()
+        threading.Thread(target=fn, args=(self.server_proc,), daemon=True).start()
 
     def run_client(
         self,

@@ -62,7 +62,7 @@ def log_all_output(proc: subprocess.Popen[bytes]) -> None:
 
 def randomword(length: int) -> str:
     letters = string.ascii_lowercase
-    return "".join(random.choice(letters) for _ in range(length)) # noqa: S311
+    return "".join(random.choice(letters) for _ in range(length))  # noqa: S311
 
 
 rnsd_process: subprocess.Popen[bytes] | None = None
@@ -228,7 +228,7 @@ def start_rngit_server(config_dir: str, server_repo: str, client_hexhash: str) -
             )
 
     rngit_process = rngit_proc
-    threading.Thread(target=log_all_output, args=(rngit_proc,)).start()
+    threading.Thread(target=log_all_output, args=(rngit_proc,), daemon=True).start()
     return dest_hash
 
 

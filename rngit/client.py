@@ -236,7 +236,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     identity_path = args.identity
 
     assert isinstance(args.verbose, bool)  # pyright: ignore[reportAny]
-    verbose = args.verbose or bool(os.environ.get("VERBOSE", "0"))
+    verbose = args.verbose or os.environ.get("VERBOSE", "0").lower() in (
+        "y",
+        "yes",
+        "true",
+        "1",
+        "on",
+    )
+
     configure_logging("git-remote-rns", logging.DEBUG if verbose else logging.WARNING)
 
     assert isinstance(args.url, str)  # pyright: ignore[reportAny]
