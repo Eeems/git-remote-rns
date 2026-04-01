@@ -72,7 +72,7 @@ def git(
                 return
 
             while True:
-                line = stream.readline()
+                line = stream.read()
                 if not line:
                     break
 
@@ -277,7 +277,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             stdin_loop(destination, sys.stdin, stdout, stderr)
 
     except ClientException as e:
-        log.exception(e)
+        log.exception(e.message)
         return e.exitcode.value
 
     except (UnicodeDecodeError, UnicodeEncodeError):
@@ -296,9 +296,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 class ClientException(Exception):
-    def __init__(self, exitcode: ExitCodes, message: str):
+    def __init__(self, exitcode: ExitCodes, message: str) -> None:
         super().__init__(message)
         self.exitcode: ExitCodes = exitcode
+        self.message: str = message
 
 
 def stdin_loop(

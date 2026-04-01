@@ -218,7 +218,7 @@ def start_rngit_server(config_dir: str, server_repo: str, client_hexhash: str) -
         ],
         check=False,
     ).returncode:
-        if rngit_proc.returncode is not None:
+        if rngit_proc.poll() is not None:
             raise RuntimeError(
                 f"Server exited early: {rngit_proc.returncode}\n{rngit_proc.stdout.read() if rngit_proc.stdout else ''}"
             )
@@ -303,15 +303,24 @@ with tempfile.TemporaryDirectory() as temp_dir:
                 _ = f.write(seed)
 
     try:
-        _ = subprocess.check_call(
-            ["git", "config", "--global", "init.defaultBranch", "master"]
-        )
-        _ = subprocess.check_call(["git", "config", "--global", "user.name", "rngit"])
-        _ = subprocess.check_call(
-            ["git", "config", "--global", "user.email", "root@localhost"]
-        )
         _ = subprocess.check_call(["git", "init"], cwd=server_repo)
+        _ = subprocess.check_call(
+            ["git", "config", "user.name", "rngit"],
+            cwd=server_repo,
+        )
+        _ = subprocess.check_call(
+            ["git", "config", "user.email", "root@localhost"],
+            cwd=server_repo,
+        )
         _ = subprocess.check_call(["git", "init"], cwd=client_repo)
+        _ = subprocess.check_call(
+            ["git", "config", "user.name", "rngit"],
+            cwd=client_repo,
+        )
+        _ = subprocess.check_call(
+            ["git", "config", "user.email", "root@localhost"],
+            cwd=client_repo,
+        )
         with open(os.path.join(server_repo, "a"), "w", encoding="utf-8") as f:
             _ = f.write("")
 
@@ -360,21 +369,27 @@ with tempfile.TemporaryDirectory() as temp_dir:
                     "list",
                     "list for-push",
                     "fetch",
-                    "push",
+                    "push ",
                     "push +",
                     "push :",
                 ][cmd_type],
             )
-            if cmd_type == 3:
+            if command == "fetch":
                 sha = fdp.ConsumeHex(20)
                 ref = fdp.ConsumeRef()
                 stdin_data = command + " " + sha + " refs/heads/" + ref + "\n\n"
 
-            elif cmd_type >= 4:
+            elif command in ("push ", "push +"):
                 ref1 = fdp.ConsumeRef()
                 ref2 = fdp.ConsumeRef()
-                stdin_data = (
-                    command + " refs/heads/" + ref1 + ":refs/heads/" + ref2 + "\n\n"
+                stdin_data = (  # space betweeen command and refs is in command
+                    command + "refs/heads/" + ref1 + ":refs/heads/" + ref2 + "\n\n"
+                )
+
+            elif command == "push :":
+                ref1 = fdp.ConsumeRef()
+                stdin_data = (  # space betweeen command and refs is in command
+                    command + "refs/heads/" + ref1 + "\n\n"
                 )
 
             else:

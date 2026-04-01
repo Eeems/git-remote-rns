@@ -75,7 +75,7 @@ def shared_rnsd():
                 stderr=subprocess.STDOUT,
             )
 
-        if rnsd_proc.returncode is not None:
+        if rnsd_proc.poll() is not None:
             stdout = (
                 rnsd_proc.stdout.read().decode() if rnsd_proc.stdout is not None else ""
             )
@@ -233,14 +233,14 @@ class IntegrationStack:
             ],
             check=False,
         ).returncode:
-            if self.server_proc.returncode is not None:
+            if self.server_proc.poll() is not None:
                 raise SetupError(
                     f"Server exited early: {self.server_proc.returncode}\n"
                     + f"{self.server_proc.stdout.read() if self.server_proc.stdout else ''}"
                 )
 
         def fn(proc: subprocess.Popen[str]):
-            while proc.returncode is None:
+            while proc.poll() is None:
                 for f in (proc.stdout, proc.stderr):
                     if f is None:
                         continue
@@ -499,6 +499,7 @@ class TestPublicAccess:
             if result.returncode != 0:
                 print(f"Fetch failed with code {result.returncode}")
                 print(f"Output: {output}")
+
             assert result.returncode == 0, f"Fetch failed: {output}"
 
         finally:
