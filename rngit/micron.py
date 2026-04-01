@@ -83,7 +83,7 @@ def file_link(
     return link(f"/file/{path}", text, params, address)
 
 
-class MicronRenderer(marko.renderer.Renderer):  # pylint: disable=R0904
+class MicronRenderer(marko.renderer.Renderer):
     def render_blank_line(self, _: marko.block.BlankLine) -> str:
         return "\n"
 
@@ -152,7 +152,7 @@ class MicronRenderer(marko.renderer.Renderer):  # pylint: disable=R0904
     def render_auto_link(self, element: marko.inline.AutoLink) -> str:
         dest = self.render_children(element)  # pyright: ignore[reportAny]
         assert isinstance(dest, str)
-        # TODO parse link to get params and address # pylint: disable=W0511
+        # TODO parse link to get params and address
         return f"`_`[{dest}]`_"
 
     def render_code_span(self, element: marko.inline.CodeSpan) -> str:
@@ -194,7 +194,7 @@ class MicronRenderer(marko.renderer.Renderer):  # pylint: disable=R0904
     def render_link(self, element: marko.inline.Link) -> str:
         children = self.render_children(element)  # pyright: ignore[reportAny]
         assert isinstance(children, str)
-        # TODO parse link to get params and address # pylint: disable=W0511
+        # TODO parse link to get params and address
         dest = escape_inline(element.dest).decode()
         return f"`_`[{children}`{dest}]`_"
 

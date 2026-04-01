@@ -1,20 +1,21 @@
 import sys
+from typing import NoReturn
 
 
-def client():
-    from .client import main as _client  # pylint: disable=C0415
+def client() -> NoReturn:
+    from .client import main as _client  # noqa: PLC0415
 
     sys.exit(_client())
 
 
-def server():
-    from .server import main as _server  # pylint: disable=C0415
+def server() -> NoReturn:
+    from .server import main as _server  # noqa: PLC0415
 
     sys.exit(_server())
 
 
-def web():
-    from .web import main as _web  # pylint: disable=C0415
+def web() -> NoReturn:
+    from .web import main as _web  # noqa: PLC0415
 
     sys.exit(_web())
 

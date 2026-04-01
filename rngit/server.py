@@ -1,4 +1,3 @@
-# pylint: disable=R0801
 import argparse
 import logging
 import os
@@ -30,11 +29,11 @@ _write_list: set[str] = set()
 _read_list: set[str] | None = set()
 
 
-def on_link_closed(link: RNS.Link):
+def on_link_closed(link: RNS.Link) -> None:
     log.debug("CLOSED: %s %s", link, link.get_remote_identity())  # pyright: ignore[reportUnknownArgumentType]
 
 
-def on_link_established(link: RNS.Link):
+def on_link_established(link: RNS.Link) -> None:
     try:
         log.debug("ESTABLISHED: %s", link)
         link.set_link_closed_callback(on_link_closed)  # pyright: ignore[reportUnknownMemberType]
@@ -45,7 +44,7 @@ def on_link_established(link: RNS.Link):
         raise
 
 
-def on_identified(link: RNS.Link, identity: RNS.Identity):
+def on_identified(link: RNS.Link, identity: RNS.Identity) -> None:
     try:
         assert link.get_remote_identity() == identity
         _ = RNS.Packet(link, packets.PACKET_IDENTIFIED.value).send()
@@ -69,7 +68,7 @@ def identity_allowed_error(
 
 
 def read_allowed_error(identity: RNS.Identity | None) -> str | None:
-    global _read_list  # pylint: disable=W0602 # noqa: F999
+    global _read_list  # noqa: PLW0602
     if _read_list is None:
         return None
 
@@ -77,12 +76,12 @@ def read_allowed_error(identity: RNS.Identity | None) -> str | None:
 
 
 def write_allowed_error(identity: RNS.Identity | None) -> str | None:
-    global _write_list  # pylint: disable=W0602 # noqa: F999
+    global _write_list  # noqa: PLW0602
     return identity_allowed_error(identity, _write_list)
 
 
 def request_repo_path(data: bytes) -> tuple[str | None, tuple[str, bytes] | None]:
-    global _repo_path  # pylint: disable=W0602 # noqa: F999
+    global _repo_path  # noqa: PLW0602
     try:
         assert isinstance(data, bytes), "data must be bytes"
         assert _repo_path is not None, "_repo_path not set"
@@ -105,8 +104,7 @@ def request_repo_path(data: bytes) -> tuple[str | None, tuple[str, bytes] | None
         proc = subprocess.run(  # nosec B607 B603# nosec B607 B603
             ["git", "rev-parse", "--git-dir"],
             cwd=repo_path,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             check=False,
         )
         if proc.returncode:
@@ -128,8 +126,8 @@ def request_repo_path(data: bytes) -> tuple[str | None, tuple[str, bytes] | None
         return str(e), None
 
 
-def log_request(path: str, repo_path: str, *args: object):
-    global _repo_path  # pylint: disable=W0602 # noqa: F999
+def log_request(path: str, repo_path: str, *args: object) -> None:
+    global _repo_path  # noqa: PLW0602
     repo_path = os.path.relpath(repo_path, _repo_path)
     log.debug("REQUEST %s %s %s", path, repo_path, " ".join(f"{f}" for f in args))
 
@@ -169,8 +167,7 @@ def on_list_request(
             ["git", "refs", "list", "--format", "%(objectname) %(refname)"],
             text=False,
             cwd=repo_path,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             check=False,
         )
         log.debug("git refs list code: %d", proc.returncode)
@@ -210,8 +207,7 @@ def on_fetch_request(
             proc = subprocess.run(  # nosec B607 B603
                 ["git", "bundle", "create", "--no-progress", bundle, ref],
                 cwd=repo_path,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                capture_output=True,
                 check=False,
             )
             log.debug("git bundle create return code: %d", proc.returncode)
@@ -260,8 +256,7 @@ def on_push_request(
             proc = subprocess.run(  # nosec B607 B603
                 ["git", "bundle", "verify", bundle],
                 cwd=repo_path,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                capture_output=True,
                 check=False,
             )
             log.debug("git bundle verify return code: %d", proc.returncode)
@@ -277,8 +272,7 @@ def on_push_request(
                     *(["--force"] if force else []),
                 ],
                 cwd=repo_path,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                capture_output=True,
                 check=False,
             )
             log.debug("git bundle unbundle return code: %d", proc.returncode)
@@ -298,7 +292,7 @@ def on_delete_request(
     _request_id: bytes,
     remote_identity: RNS.Identity | None,
     _request_at: float,
-):
+) -> bytes:
     try:
         err = write_allowed_error(remote_identity)
         if err is not None:
@@ -319,8 +313,7 @@ def on_delete_request(
         proc = subprocess.run(  # nosec B607 B603
             ["git", "update-ref", "-d", ref],
             cwd=repo_path,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             check=False,
         )
         log.debug("git update-ref return code: %d", proc.returncode)
@@ -334,7 +327,7 @@ def on_delete_request(
         return b"\1" + str(e).encode()
 
 
-def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
+def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="RNS Git Server", allow_abbrev=False)
     _ = parser.add_argument("repo", help="Path to git repository to serve")
     _ = parser.add_argument(
@@ -532,7 +525,7 @@ def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
 
     process: subprocess.Popen[bytes] | None = None
     if nomadnet:
-        process = subprocess.Popen(  # pylint: disable=R1732
+        process = subprocess.Popen(
             [
                 *(
                     []

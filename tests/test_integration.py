@@ -11,7 +11,9 @@ import sys
 import tempfile
 import threading
 import time
+from collections.abc import Generator
 from pathlib import Path
+from typing import Any
 
 import pytest
 import RNS
@@ -23,7 +25,7 @@ class SetupError(RuntimeError):
 
 def randomword(length: int) -> str:
     letters = string.ascii_lowercase
-    return "".join(random.choice(letters) for _ in range(length))
+    return "".join(random.choice(letters) for _ in range(length))  # noqa: S311
 
 
 RETICULUM_CONFIG = f"""
@@ -46,7 +48,7 @@ _rnsd_config_dir: Path | None = None
 
 
 @pytest.fixture(scope="session", autouse=True)
-def shared_rnsd():
+def shared_rnsd() -> Generator[Path, Any, None]:  # pyright: ignore[reportExplicitAny]
     global _rnsd_process
     global _rnsd_config_dir
     config_dir = Path(tempfile.mkdtemp())
@@ -62,7 +64,7 @@ def shared_rnsd():
     remaining = tries
     while True:
         if rnsd_proc is None:
-            rnsd_proc = subprocess.Popen(  # pylint: disable=R1732
+            rnsd_proc = subprocess.Popen(
                 [
                     sys.executable,
                     "-m",
@@ -75,7 +77,7 @@ def shared_rnsd():
                 stderr=subprocess.STDOUT,
             )
 
-        if rnsd_proc.returncode is not None:
+        if rnsd_proc.poll() is not None:
             stdout = (
                 rnsd_proc.stdout.read().decode() if rnsd_proc.stdout is not None else ""
             )
@@ -143,7 +145,7 @@ def shared_rnsd():
 
 
 class IntegrationStack:
-    def __init__(self, rns_config: Path, server_repo: Path):
+    def __init__(self, rns_config: Path, server_repo: Path) -> None:
         self.rns_config: Path = rns_config
         self.server_repo: Path = server_repo
         self.server_proc: subprocess.Popen[str] | None = None
@@ -159,7 +161,7 @@ class IntegrationStack:
         allow_all_read: bool = False,
         allow_read: list[str] | None = None,
         allow_write: list[str] | None = None,
-    ):
+    ) -> None:
         args = [
             sys.executable,
             "-m",
@@ -183,7 +185,7 @@ class IntegrationStack:
                 for identity in allow_write:
                     args.extend(["--allow-write", identity])
 
-        self.server_proc = subprocess.Popen(  # pylint: disable=R1732
+        self.server_proc = subprocess.Popen(
             args,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -233,14 +235,14 @@ class IntegrationStack:
             ],
             check=False,
         ).returncode:
-            if self.server_proc.returncode is not None:
+            if self.server_proc.poll() is not None:
                 raise SetupError(
                     f"Server exited early: {self.server_proc.returncode}\n"
                     + f"{self.server_proc.stdout.read() if self.server_proc.stdout else ''}"
                 )
 
-        def fn(proc: subprocess.Popen[str]):
-            while proc.returncode is None:
+        def fn(proc: subprocess.Popen[str]) -> None:
+            while proc.poll() is None:
                 for f in (proc.stdout, proc.stderr):
                     if f is None:
                         continue
@@ -249,7 +251,7 @@ class IntegrationStack:
                     if line:
                         print(line, file=sys.stderr, end="")
 
-        threading.Thread(target=fn, args=(self.server_proc,)).start()
+        threading.Thread(target=fn, args=(self.server_proc,), daemon=True).start()
 
     def run_client(
         self,
@@ -499,6 +501,7 @@ class TestPublicAccess:
             if result.returncode != 0:
                 print(f"Fetch failed with code {result.returncode}")
                 print(f"Output: {output}")
+
             assert result.returncode == 0, f"Fetch failed: {output}"
 
         finally:

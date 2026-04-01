@@ -10,13 +10,13 @@ import traceback
 import typing
 from argparse import Namespace
 from collections import defaultdict
+from collections.abc import Callable
 from enum import Enum
 from hashlib import sha256
 from io import BufferedReader
 from subprocess import CalledProcessError
 from typing import (
     Any,
-    Callable,
     Literal,
     NoReturn,
     cast,
@@ -100,7 +100,7 @@ FileHandler = Callable[..., FileResponse | None]
 
 # Hack to allow returning "Not found" errors for pages without handlers"
 class RequestHandlers(defaultdict):  # pyright: ignore[reportMissingTypeArgument]
-    def __init__(self, app: "Application"):
+    def __init__(self, app: "Application") -> None:
         super().__init__()  # pyright: ignore[reportUnknownMemberType]
         self._default: HandlerRegistration = (
             "?",
@@ -197,7 +197,7 @@ class Application:
         return self._identity
 
     @identity.setter
-    def identity(self, identity_or_path: str | RNS.Identity | None):  # pyright: ignore[reportPropertyTypeMismatch]
+    def identity(self, identity_or_path: str | RNS.Identity | None) -> None:  # pyright: ignore[reportPropertyTypeMismatch]
         if self._identity is not None:
             raise ValueError("Identity already set")
 
@@ -295,7 +295,7 @@ class Application:
         self,
         identity_or_hexhash_or_special: RNS.Identity | str | SpecialPermissions,
         permission: str,
-    ):
+    ) -> None:
         if isinstance(identity_or_hexhash_or_special, SpecialPermissions):
             hexhash = identity_or_hexhash_or_special.value
 
@@ -558,6 +558,7 @@ class Application:
             target=self._request_thread,  # pyright: ignore[reportUnknownArgumentType, reportUnknownMemberType]
             args=(fn, request, response),
             kwargs=params,
+            daemon=True,
         )
         thread.start()
         thread.join(timeout)

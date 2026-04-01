@@ -1,12 +1,19 @@
 import errno
+import io
 import logging
 import os
 import string
 import subprocess
 import sys
 from enum import Enum
+from typing import (
+    IO,
+    cast,
+)
 
 import RNS
+
+from ._compat import override
 
 APP_NAME = "git"
 EXPECTED_HEXHASH_LENGTH = (RNS.Reticulum.TRUNCATED_HASHLENGTH // 8) * 2
@@ -24,9 +31,10 @@ class ExitCodes(Enum):
     BAD_ARGUMENT = errno.EINVAL
     NETWORK_ERROR = errno.ECANCELED
     UNICODE_ERROR = errno.EBADE
+    CHILD_EXCEPTION = errno.ECHILD
 
 
-def configure_logging(name: str, level: int = logging.WARNING):
+def configure_logging(name: str, level: int = logging.WARNING) -> None:
     while logging.root.handlers:
         logging.root.removeHandler(logging.root.handlers[0])
 
@@ -83,3 +91,31 @@ def find_repos(root_dir: str) -> list[str]:
             text=True,
         ).splitlines(False)
     ]
+
+
+class BytesIOWrapper(io.BufferedWriter):
+    """Wrap a buffered bytes stream over TextIOBase string stream."""
+
+    def __init__(
+        self,
+        buffer: IO[str],
+        encoding: str | None = None,
+        errors: str | None = None,
+        buffer_size: int = 131072,
+    ) -> None:
+        super().__init__(buffer, buffer_size=buffer_size)  # pyright: ignore[reportArgumentType]
+        self.encoding: str = encoding or getattr(buffer, "encoding", None) or "utf-8"
+        self.errors: str = errors or getattr(buffer, "errors", None) or "strict"
+
+    @override
+    def write(self, buffer: bytes) -> int:
+        text = buffer.decode(self.encoding, self.errors)
+        chars_written = cast(IO[str], cast(object, self.raw)).write(text)
+        if chars_written < len(text):
+            return len(text[:chars_written].encode(self.encoding, self.errors))
+
+        return len(buffer)
+
+    @override
+    def flush(self) -> None:
+        cast(IO[str], cast(object, self.raw)).flush()

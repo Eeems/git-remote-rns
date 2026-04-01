@@ -1,6 +1,6 @@
 [project]
 name = "git-remote-rns"
-version = "0.2.1"
+version = "0.2.2"
 description = "Git remote helper for syncing repositories over Reticulum"
 requires-python = ">=3.11"
 license = "MIT"
@@ -47,9 +47,7 @@ fuzz = [
 
 dev = [
     'basedpyright',
-    "bandit",
     "dodgy",
-    "pylint",
     "pyroma",
     "ruff",
     "vulture",
@@ -77,38 +75,31 @@ packages = ["rngit"]
 [tool.ruff]
 exclude = [".venv", "build", "**/__whitelist.py"]
 
+[tool.ruff.lint]
+extend-select = [
+    "UP",
+    "PL",
+    "ANN",
+    "S",
+]
+ignore = [
+    "PLW0603",
+    "PLR2004",
+    "PLR0915",
+    "PLR0912",
+    "PLR0911",
+    "S101",
+    "S404",
+    "S603",
+    "S607",
+    "ANN401",
+    "ANN001",
+    "ANN003",
+]
+
 [tool.pyright]
 exclude = [".venv", "build", "**/__whitelist.py"]
 reportMissingTypeStubs = false
-
-[tool.pylint]
-ignore-paths = [
-    ".venv/",
-    "build/",
-    "rngit/__whitelist.py",
-    "tests/__whitelist.py",
-    ".repos/",
-]
-
-[tool.pylint."messages control"]
-disable = [
-    "broad-exception-caught",
-    "global-statement",
-    "invalid-name",
-    "line-too-long",
-    "missing-class-docstring",
-    "missing-function-docstring",
-    "missing-module-docstring",
-    "too-few-public-methods",
-    "too-many-arguments",
-    "too-many-branches",
-    "too-many-instance-attributes",
-    "too-many-locals",
-    "too-many-positional-arguments",
-    "too-many-public-methods",
-    "too-many-return-statements",
-    "too-many-statements",
-]
 
 [tool.vulture]
 ignore_names = ["__*", "_*", "_"]
@@ -122,19 +113,4 @@ exclude = [
     ".venv/",
     "build/",
     ".repos/",
-]
-
-[tool.bandit]
-exclude_dirs = [
-    ".venv/",
-    "build/",
-    "**/__whitelist.py",
-    ".*/"
-]
-skips = [
-    'B101',
-    'B404',
-    "B603",
-    "B607",
-    "B311",
 ]

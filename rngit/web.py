@@ -1,4 +1,3 @@
-# pylint: disable=R0801
 import argparse
 import logging
 import math
@@ -173,7 +172,7 @@ def commits(
         if len(parts) != 7:
             raise RuntimeError("Data returned doesn't match expected format")
 
-        short_sha, sha, author_name, author_email, date, refs, subject = parts  # pylint: disable=W0621
+        short_sha, sha, author_name, author_email, date, refs, subject = parts
 
         yield (
             (short_sha, sha),
@@ -224,7 +223,7 @@ def _(_request: Request) -> bytes | None:
 
 
 @app.page("repo", ttl=60, permissions=["read"])
-def _(  # pylint: disable=E0102 # noqa: F811
+def _(  # noqa: F811
     _request: Request,
     repo: str,
 ) -> bytes | None:
@@ -244,7 +243,7 @@ def _(  # pylint: disable=E0102 # noqa: F811
 
 
 @app.page("branches", ttl=60, permissions=["read"])
-def _(  # pylint: disable=E0102 # noqa: F811
+def _(  # noqa: F811
     _request: Request,
     repo: str,
 ) -> bytes | None:
@@ -267,7 +266,7 @@ def _(  # pylint: disable=E0102 # noqa: F811
 
 
 @app.page("branch", ttl=60, permissions=["read"])
-def _(  # pylint: disable=E0102 # noqa: F811
+def _(  # noqa: F811
     _request: Request,
     repo: str,
     branch: str,
@@ -290,7 +289,7 @@ def _(  # pylint: disable=E0102 # noqa: F811
 
 
 @app.page("tags", ttl=60, permissions=["read"])
-def _(  # pylint: disable=E0102 # noqa: F811
+def _(  # noqa: F811
     _request: Request,
     repo: str,
 ) -> bytes | None:
@@ -308,7 +307,7 @@ def _(  # pylint: disable=E0102 # noqa: F811
 
 
 @app.page("tag", ttl=60, permissions=["read"])
-def _(  # pylint: disable=E0102 # noqa: F811
+def _(  # noqa: F811
     _request: Request,
     repo: str,
     tag: str,
@@ -331,7 +330,7 @@ def _(  # pylint: disable=E0102 # noqa: F811
 
 
 @app.page("tree", ttl=60, permissions=["read"])
-def _(  # pylint: disable=E0102 # noqa: F811
+def _(  # noqa: F811
     _request: Request,
     repo: str,
     ref: str | None = None,
@@ -385,7 +384,7 @@ def _(  # pylint: disable=E0102 # noqa: F811
 
 
 @app.page("commits", ttl=60, permissions=["read"])
-def _(  # pylint: disable=E0102 # noqa: F811
+def _(  # noqa: F811
     _request: Request,
     repo: str,
     branch: str | None = None,
@@ -474,7 +473,7 @@ def _(  # pylint: disable=E0102 # noqa: F811
 
 
 @app.page("blob", ttl=60, permissions=["read"])
-def _(  # pylint: disable=E0102 # noqa: F811
+def _(  # noqa: F811
     _request: Request,
     repo: str,
     path: str,
@@ -522,7 +521,7 @@ def _(  # pylint: disable=E0102 # noqa: F811
 
 
 @app.page("commit", ttl=60, permissions=["read"])
-def _(  # pylint: disable=E0102 # noqa: F811
+def _(  # noqa: F811
     _request: Request,
     repo: str,
     sha: str,
@@ -569,7 +568,7 @@ def _(  # pylint: disable=E0102 # noqa: F811
 
 
 @app.page("diff", ttl=60, permissions=["read"])
-def _(  # pylint: disable=E0102 # noqa: F811
+def _(  # noqa: F811
     _request: Request,
     repo: str,
     sha: str,
@@ -591,7 +590,7 @@ def _(  # pylint: disable=E0102 # noqa: F811
     ]
     content: list[bytes] = []
     for line in (
-        git(repo, "show", "--ignore-all-space", sha, "--", path)
+        git(repo, "show", "--pretty=format:", "--ignore-all-space", sha, "--", path)
         .decode()
         .splitlines(False)
     ):
@@ -607,7 +606,7 @@ def _(  # pylint: disable=E0102 # noqa: F811
     return header(f"diff: {path}", breadcrumbs) + b"\n".join(content)
 
 
-def main(argv: Sequence[str] | None = None) -> int:  # noqa: MC0001
+def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="rngit-web")
     _ = parser.add_argument("repo", help="Path to git repository to serve")
     _ = parser.add_argument(

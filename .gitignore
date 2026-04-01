@@ -52,4 +52,4 @@ fuzz/oom-*
 fuzz/timeout-*
 fuzz/slow-unit-*
 fuzz/corpus/fuzz_application/seed/
-fuzz/corpus/fuzz_integration/seed/
+fuzz/corpus/fuzz_client/seed/

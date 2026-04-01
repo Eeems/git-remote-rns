@@ -2,7 +2,7 @@ from rngit import micron
 
 
 class TestMicron:
-    def test_convert_markdown(self):
+    def test_convert_markdown(self) -> None:
         assert micron.convert_markdown("Test") == b"Test\n"
         assert micron.convert_markdown("_Test_") == b"`*Test`*\n"
         assert micron.convert_markdown("*Test*") == b"`*Test`*\n"

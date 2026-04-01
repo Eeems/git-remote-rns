@@ -1,4 +1,3 @@
-# pylint: disable=R0801
 import json
 import logging
 import os
@@ -10,12 +9,12 @@ from subprocess import CalledProcessError
 import atheris
 
 with atheris.instrument_imports():
-    from rngit.app import (  # pyright: ignore[reportImplicitRelativeImport]
+    from rngit.app import (  # pyright: ignore[reportImplicitRelativeImport] # noqa: PLC0415
         Application,
         InvalidParameterType,
         Request,
     )
-    from rngit.shared import (  # pyright: ignore[reportImplicitRelativeImport]
+    from rngit.shared import (  # pyright: ignore[reportImplicitRelativeImport] # noqa: PLC0415
         configure_logging,
         is_valid_hexhash,
     )
@@ -73,16 +72,16 @@ with tempfile.TemporaryDirectory(prefix="rngit_fuzz_") as t:
             "_bool": fdp.ConsumeBool(),
         }
         try:
-            parameters = app._get_parameters(fn)  # pyright: ignore[reportPrivateUsage] # pylint: disable=W0212
+            parameters = app._get_parameters(fn)  # pyright: ignore[reportPrivateUsage]
             request = Request(path, data, hexhash, None, 0.0)
             _ = path in request
             _ = request.param(path)  # pyright: ignore[reportAny]
 
             try:
-                params = app._parse_params(request, parameters)  # pyright: ignore[reportPrivateUsage] # pylint: disable=W0212
+                params = app._parse_params(request, parameters)  # pyright: ignore[reportPrivateUsage]
 
             except InvalidParameterType as e:
-                raise e.exceptions[0] from e  # pylint: disable=E1136
+                raise e.exceptions[0] from e
 
             idx = sha256(
                 path.encode() + json.dumps(params, sort_keys=True).encode()
