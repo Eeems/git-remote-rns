@@ -62,7 +62,7 @@ def shared_rnsd():
     remaining = tries
     while True:
         if rnsd_proc is None:
-            rnsd_proc = subprocess.Popen(  # pylint: disable=R1732
+            rnsd_proc = subprocess.Popen(
                 [
                     sys.executable,
                     "-m",
@@ -183,7 +183,7 @@ class IntegrationStack:
                 for identity in allow_write:
                     args.extend(["--allow-write", identity])
 
-        self.server_proc = subprocess.Popen(  # pylint: disable=R1732
+        self.server_proc = subprocess.Popen(
             args,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,

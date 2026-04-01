@@ -10,13 +10,13 @@ import traceback
 import typing
 from argparse import Namespace
 from collections import defaultdict
+from collections.abc import Callable
 from enum import Enum
 from hashlib import sha256
 from io import BufferedReader
 from subprocess import CalledProcessError
 from typing import (
     Any,
-    Callable,
     Literal,
     NoReturn,
     cast,

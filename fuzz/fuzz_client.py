@@ -1,4 +1,3 @@
-# pylint: disable=R0801
 import io
 import logging
 import os
@@ -21,8 +20,10 @@ import atheris
 import RNS
 
 with atheris.instrument_imports():
-    from rngit import client  # pyright: ignore[reportImplicitRelativeImport]
-    from rngit.shared import (  # pyright: ignore[reportImplicitRelativeImport]
+    from rngit import (  # pyright: ignore[reportImplicitRelativeImport] # noqa: PLC0415
+        client,
+    )
+    from rngit.shared import (  # pyright: ignore[reportImplicitRelativeImport] # noqa: PLC0415
         BytesIOWrapper,
         ExitCodes,
         configure_logging,
@@ -68,14 +69,14 @@ rnsd_process: subprocess.Popen[bytes] | None = None
 rngit_process: subprocess.Popen[str] | None = None
 
 
-def start_rnsd(config_dir: str) -> subprocess.Popen[bytes]:  # pylint: disable=W0621
+def start_rnsd(config_dir: str) -> subprocess.Popen[bytes]:
     global rnsd_process
     rns_config = os.path.join(config_dir, "config")
-    with open(rns_config, "w", encoding="utf-8") as f:  # pylint: disable=W0621
+    with open(rns_config, "w", encoding="utf-8") as f:
         _ = f.write(RETICULUM_CONFIG.format(randomword=randomword(5)))
 
     print("Starting rnsd...")
-    rnsd_proc = subprocess.Popen(  # pylint: disable=R1732
+    rnsd_proc = subprocess.Popen(
         [
             sys.executable,
             "-m",
@@ -129,7 +130,7 @@ def start_rnsd(config_dir: str) -> subprocess.Popen[bytes]:  # pylint: disable=W
             _ = rnsd_proc.wait()
 
         if remaining:
-            rnsd_proc = subprocess.Popen(  # pylint: disable=R1732
+            rnsd_proc = subprocess.Popen(
                 [
                     sys.executable,
                     "-m",
@@ -156,11 +157,11 @@ def start_rnsd(config_dir: str) -> subprocess.Popen[bytes]:  # pylint: disable=W
     return rnsd_proc
 
 
-def start_rngit_server(config_dir: str, server_repo: str, client_hexhash: str) -> str:  # pylint: disable=W0621
+def start_rngit_server(config_dir: str, server_repo: str, client_hexhash: str) -> str:
     global rngit_process
     print("Starting rngit server...")
 
-    rngit_proc = subprocess.Popen(  # pylint: disable=R1732
+    rngit_proc = subprocess.Popen(
         [
             sys.executable,
             "-m",
@@ -265,14 +266,14 @@ with tempfile.TemporaryDirectory() as temp_dir:
 
     client_repo = os.path.join(temp_dir, "client_repo")
     os.makedirs(client_repo, exist_ok=True)
-    client._repo_path = client_repo  # pyright: ignore[reportPrivateUsage] # pylint: disable=W0212
+    client._repo_path = client_repo  # pyright: ignore[reportPrivateUsage]
 
     identity_path = os.path.join(config_dir, "identity")
     identity = RNS.Identity(True)
     _ = identity.to_file(identity_path)  # pyright: ignore[reportUnknownMemberType]
     client_identity = identity.hexhash
     assert client_identity is not None
-    client._identity = identity  # pyright: ignore[reportPrivateUsage] # pylint: disable=W0212
+    client._identity = identity  # pyright: ignore[reportPrivateUsage]
 
     print(f"Client identity: {client_identity}")
 

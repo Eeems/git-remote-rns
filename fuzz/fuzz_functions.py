@@ -1,4 +1,3 @@
-# pylint: disable=R0801
 import logging
 import os
 import sys
@@ -7,10 +6,10 @@ import tempfile
 import atheris
 
 with atheris.instrument_imports():
-    from rngit.client import (  # pyright: ignore[reportImplicitRelativeImport]
+    from rngit.client import (  # pyright: ignore[reportImplicitRelativeImport] # noqa: PLC0415
         c_style_quote,
     )
-    from rngit.micron import (  # pyright: ignore[reportImplicitRelativeImport]
+    from rngit.micron import (  # pyright: ignore[reportImplicitRelativeImport] # noqa: PLC0415
         # convert_markdown,
         escape,
         escape_inline,
@@ -20,7 +19,7 @@ with atheris.instrument_imports():
         paramescape,
         paramunescape,
     )
-    from rngit.shared import (  # pyright: ignore[reportImplicitRelativeImport]
+    from rngit.shared import (  # pyright: ignore[reportImplicitRelativeImport] # noqa: PLC0415
         _normalize_repo,  # pyright: ignore[reportPrivateUsage]
         configure_logging,
         is_valid_hexhash,

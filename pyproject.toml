@@ -49,7 +49,6 @@ dev = [
     'basedpyright',
     "bandit",
     "dodgy",
-    "pylint",
     "pyroma",
     "ruff",
     "vulture",
@@ -76,40 +75,23 @@ packages = ["rngit"]
 
 [tool.ruff]
 exclude = [".venv", "build", "**/__whitelist.py"]
-extend-select = ["UP"]
+
+[tool.ruff.lint]
+extend-select = [
+    "UP",
+    "PL",
+]
+ignore = [
+    "PLW0603",
+    "PLR2004",
+    "PLR0915",
+    "PLR0912",
+    "PLR0911",
+]
 
 [tool.pyright]
 exclude = [".venv", "build", "**/__whitelist.py"]
 reportMissingTypeStubs = false
-
-[tool.pylint]
-ignore-paths = [
-    ".venv/",
-    "build/",
-    "rngit/__whitelist.py",
-    "tests/__whitelist.py",
-    ".repos/",
-]
-
-[tool.pylint."messages control"]
-disable = [
-    "broad-exception-caught",
-    "global-statement",
-    "invalid-name",
-    "line-too-long",
-    "missing-class-docstring",
-    "missing-function-docstring",
-    "missing-module-docstring",
-    "too-few-public-methods",
-    "too-many-arguments",
-    "too-many-branches",
-    "too-many-instance-attributes",
-    "too-many-locals",
-    "too-many-positional-arguments",
-    "too-many-public-methods",
-    "too-many-return-statements",
-    "too-many-statements",
-]
 
 [tool.vulture]
 ignore_names = ["__*", "_*", "_"]

@@ -1,4 +1,3 @@
-# pylint: disable=R0801
 import argparse
 import io
 import logging
@@ -7,11 +6,13 @@ import selectors
 import subprocess
 import sys
 import threading
-from collections.abc import Sequence
+from collections.abc import (
+    Callable,
+    Sequence,
+)
 from tempfile import TemporaryDirectory
 from typing import (
     IO,
-    Callable,
     cast,
 )
 
@@ -45,7 +46,7 @@ def git(
     stderr: IO[bytes] | int | None = None,
 ) -> None:
     cmd = ["git", *args]
-    process = subprocess.Popen(  # nosec B607 B603 # pylint: disable=R1732
+    process = subprocess.Popen(  # nosec B607 B603
         cmd,
         stdout=subprocess.PIPE if isinstance(stdout, io.IOBase) else stdout,
         stderr=subprocess.PIPE if isinstance(stderr, io.IOBase) else stderr,
@@ -105,7 +106,7 @@ def log_and_stdout(stdout: IO[bytes], msg: str):
 
 
 def on_link_established(link: RNS.Link):
-    global _identity  # pylint: disable=W0602 # noqa: F999
+    global _identity  # noqa: F999,PLW0602
     assert _identity is not None
     log.debug("ESTABLISHED: %s", link)
     link.set_packet_callback(on_packet)  # pyright: ignore[reportUnknownMemberType]
@@ -113,13 +114,13 @@ def on_link_established(link: RNS.Link):
 
 
 def on_link_closed(link: RNS.Link):
-    global _linkEvent  # pylint: disable=W0602 # noqa: F999
+    global _linkEvent  # noqa: F999,PLW0602
     log.debug("CLOSED: %s", link)
     _linkEvent.clear()
 
 
 def on_packet(message: bytes, _packet: RNS.Packet):
-    global _linkEvent  # pylint: disable=W0602 # noqa: F999
+    global _linkEvent  # noqa: F999,PLW0602
     log.debug("PACKET: %s", message)
     match message:
         case packets.PACKET_IDENTIFIED.value:
@@ -132,7 +133,7 @@ def on_packet(message: bytes, _packet: RNS.Packet):
 def request(
     link: RNS.Link, path: str, data: bytes = b""
 ) -> tuple[str | None, bytes | None]:
-    global _repo_path  # pylint: disable=W0602 # noqa: F999
+    global _repo_path  # noqa: F999,PLW0602
     assert _repo_path is not None
     event = threading.Event()
     log.debug("REQUEST %s", path)
@@ -235,7 +236,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     identity_path = args.identity
 
     assert isinstance(args.verbose, bool)  # pyright: ignore[reportAny]
-    verbose = args.verbose or bool(os.environ.get("VERBOSE", 0))
+    verbose = args.verbose or bool(os.environ.get("VERBOSE", "0"))
     configure_logging("git-remote-rns", logging.DEBUG if verbose else logging.WARNING)
 
     assert isinstance(args.url, str)  # pyright: ignore[reportAny]
@@ -328,8 +329,8 @@ def stdin_loop(
     link = RNS.Link(server_destination, on_link_established, on_link_closed)
     push_queue: list[tuple[str, str]] = []
     fetch_queue: list[tuple[str, str]] = []
-    global _linkEvent  # pylint: disable=W0602 # noqa: F999
-    try:  # pylint: disable=too-many-nested-blocks
+    global _linkEvent  # noqa: F999,PLW0602
+    try:
         for line in stdin:
             _ = _linkEvent.wait()
             if not line:

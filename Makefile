@@ -288,7 +288,6 @@ lint: requirements-dev requirements-web requirements-test requirements-fuzz ## L
 	  fi; \
 	  echo "OKAY"; \
 	}; \
-	runtool pylint --recursive=yes .; \
 	runtool ruff check; \
 	for dir in rngit tests;do \
 	  for tool in basedpyright vulture;do \
