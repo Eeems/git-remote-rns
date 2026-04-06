@@ -1,7 +1,7 @@
 git-remote-rns
 ==============
 
-Reticulum remote transport for git. A mirror of this repo is hosted at `rns::6969b682832a26db5bcf2b5818e9d2f0/git-remote-rns`.
+Reticulum remote transport for git. A mirror of this repo is hosted at `rns::6969b682832a26db5bcf2b5818e9d2f0/git-remote-rns.git`.
 
 Installation
 ------------
