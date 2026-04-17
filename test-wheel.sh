@@ -30,9 +30,13 @@ if [[ "$arch" != "x86_64" ]]; then
 		--rm \
 		tonistiigi/binfmt --install all
 fi
+case "$arch" in
+armv7l) platform="linux/arm/v7" ;;
+*) platform="linux/${arch}" ;;
+esac
 docker run \
 	--rm \
 	--volume="$(pwd):/src" \
-	--platform="linux/${arch}" \
+	--platform="$platform" \
 	"$image" \
 	/bin/sh -ec "$script"
