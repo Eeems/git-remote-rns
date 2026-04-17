@@ -24,12 +24,6 @@ if [[ "$libc" == "musl" ]]; then
 else
   image="python:${python}"
 fi
-if [[ "$arch" != "x86_64" ]]; then
-  docker run \
-    --privileged \
-    --rm \
-    tonistiigi/binfmt --install all
-fi
 case "$arch" in
 i686)
   echo "WARNING: Unable to test i686 as there is no suitable python image. Skipping without error for now."
@@ -42,6 +36,12 @@ s390x)
 armv7l) platform="linux/arm/v7" ;;
 *) platform="linux/${arch}" ;;
 esac
+if [[ "$arch" != "x86_64" ]]; then
+  docker run \
+    --privileged \
+    --rm \
+    tonistiigi/binfmt --install all
+fi
 docker run \
   --rm \
   --volume="$(pwd):/src" \
