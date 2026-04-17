@@ -28,4 +28,4 @@ docker run \
 	--volume="$(pwd):/src" \
 	--platform="linux/${arch}" \
 	"$image" \
-	/bin/bash -ec "$script"
+	/bin/sh -ec "$script"
