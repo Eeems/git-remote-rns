@@ -6,7 +6,8 @@ python=${python:-3.11}
 
 if [[ "$libc" == "musl" ]]; then
 	image="python:${python}-alpine"
-	image="python:{$python}"
+else
+	image="python:${python}"
 fi
 if [[ "$arch" != "x86_64" ]]; then
 	docker run \
@@ -14,10 +15,12 @@ if [[ "$arch" != "x86_64" ]]; then
 		--rm \
 		tonistiigi/binfmt --install all
 fi
+wheel="$(find dist -name "*linux_${arch}.whl" | head -n1)"
 script=$(
 	cat <<EOF
-pip install dist/*_$arch.whl;
-python -m pytest -vv tests/
+cd /src;
+pip install "${wheel}"[web,test];
+python -m pytest -vv tests/;
 EOF
 )
 docker run \
