@@ -4,17 +4,6 @@ libc=${libc:-glibc}
 arch=${arch:-x86_64}
 python=${python:-3.11}
 
-if [[ "$libc" == "musl" ]]; then
-	image="python:${python}-alpine"
-else
-	image="python:${python}"
-fi
-if [[ "$arch" != "x86_64" ]]; then
-	docker run \
-		--privileged \
-		--rm \
-		tonistiigi/binfmt --install all
-fi
 wheel="$(find dist -name "*linux_${arch}.whl" | head -n1)"
 script=$(
 	cat <<EOF
@@ -29,6 +18,18 @@ cp -r /src/tests .
 python -m pytest -vv tests;
 EOF
 )
+if [[ "$libc" == "musl" ]]; then
+	image="python:${python}-alpine"
+	script="apk add --no-cache git;$script"
+else
+	image="python:${python}"
+fi
+if [[ "$arch" != "x86_64" ]]; then
+	docker run \
+		--privileged \
+		--rm \
+		tonistiigi/binfmt --install all
+fi
 docker run \
 	--rm \
 	--volume="$(pwd):/src" \
