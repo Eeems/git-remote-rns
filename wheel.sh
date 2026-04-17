@@ -8,7 +8,7 @@ python_interpreter=cp${python//./}-cp${python//./}
 script=$(
   cat <<EOF
 manylinux-interpreters ensure "${python_interpreter}";
-PATH="\$PATH:/opt/python/${python_interpreter}/bin";
+PATH="/opt/python/${python_interpreter}/bin:\$PATH";
 cd /src;
 if [ -d build ];then
   SKIP_TESTS=1 make clean
