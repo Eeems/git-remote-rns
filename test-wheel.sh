@@ -33,7 +33,24 @@ s390x)
   echo "WARNING: Unable to test s390x as not all dependencies have wheels for it. Skipping without error for now."
   exit 0
   ;;
-armv7l) platform="linux/arm/v7" ;;
+riscv64)
+  echo "WARNING: Unable to test riscv64 as not all dependencies have wheels for it. Skipping without error for now."
+  exit 0
+  ;;
+ppc64le)
+  if [[ "$libc" == "musl" ]]; then
+    echo "WARNING: Unable to test ppc64ls on musl as not all dependencies have wheels for it. Skipping without error for now."
+    exit 0
+  fi
+  platform="linux/${arch}"
+  ;;
+armv7l)
+  if [[ "$libc" == "musl" ]]; then
+    echo "WARNING: Unable to test armv7l on musl as not all dependencies have wheels for it. Skipping without error for now."
+    exit 0
+  fi
+  platform="linux/arm/v7"
+  ;;
 *) platform="linux/${arch}" ;;
 esac
 if [[ "$arch" != "x86_64" ]]; then
