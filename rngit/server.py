@@ -164,7 +164,7 @@ def on_list_request(
             ref = f.read()[5:].rstrip().decode()
 
         proc = subprocess.run(  # nosec B607 B603
-            ["git", "refs", "list", "--format", "%(objectname) %(refname)"],
+            ["git", "for-each-ref", "--format", "%(objectname) %(refname)"],
             text=False,
             cwd=repo_path,
             capture_output=True,

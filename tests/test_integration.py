@@ -18,6 +18,8 @@ from typing import Any
 import pytest
 import RNS
 
+import rngit
+
 
 class SetupError(RuntimeError):
     pass
@@ -163,9 +165,15 @@ class IntegrationStack:
         allow_write: list[str] | None = None,
     ) -> None:
         args = [
-            sys.executable,
-            "-m",
-            "rngit",
+            *(
+                []
+                if hasattr(rngit, "__compiled__")
+                else [
+                    sys.executable,
+                    "-m",
+                    "rngit",
+                ]
+            ),
             "rngit",
             str(self.server_repo),
             "--verbose",
@@ -211,13 +219,13 @@ class IntegrationStack:
                     break
 
                 if "error" in line.lower():
-                    raise SetupError(f"Server error: {line}")
+                    raise SetupError(f"Server error: {line}\n{args}")
             else:
                 break
 
         if self.server_proc.poll() is not None and dest_hash is None:
             raise SetupError(
-                f"rngit exited early with code {self.server_proc.returncode}"
+                f"rngit exited early with code {self.server_proc.returncode}\n{args}"
             )
 
         assert dest_hash is not None, "Could not get destination hash from server"
@@ -237,7 +245,7 @@ class IntegrationStack:
         ).returncode:
             if self.server_proc.poll() is not None:
                 raise SetupError(
-                    f"Server exited early: {self.server_proc.returncode}\n"
+                    f"Server exited early: {self.server_proc.returncode}\n{args}\n"
                     + f"{self.server_proc.stdout.read() if self.server_proc.stdout else ''}"
                 )
 
@@ -268,9 +276,15 @@ class IntegrationStack:
 
         result = subprocess.run(
             [
-                sys.executable,
-                "-m",
-                "rngit",
+                *(
+                    []
+                    if hasattr(rngit, "__compiled__")
+                    else [
+                        sys.executable,
+                        "-m",
+                        "rngit",
+                    ]
+                ),
                 "git-remote-rns",
                 *flags,
                 "origin",

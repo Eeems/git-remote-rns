@@ -7,15 +7,15 @@ python=${python:-3.11}
 python_interpreter=cp${python//./}-cp${python//./}
 script=$(
   cat <<EOF
-manylinux-interpreters ensure $python_interpreter;
-python=/opt/python/$python_interpreter/bin/python
+manylinux-interpreters ensure "${python_interpreter}";
+PATH="\$PATH:/opt/python/${python_interpreter}/bin";
 cd /src;
 if [ -d build ];then
-  make clean
+  SKIP_TESTS=1 make clean
 fi
-\$python -m pip install --upgrade build;
-\$python -m build --wheel;
-auditwheel repair dist/*_$arch.whl;
+python -m pip install --upgrade build;
+python -m build --wheel;
+auditwheel repair dist/*_${arch}.whl;
 EOF
 )
 if [[ "$libc" == "musl" ]]; then
