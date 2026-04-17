@@ -31,6 +31,7 @@ if [[ "$arch" != "x86_64" ]]; then
 		tonistiigi/binfmt --install all
 fi
 case "$arch" in
+i686) platform="linux/386" ;;
 armv7l) platform="linux/arm/v7" ;;
 *) platform="linux/${arch}" ;;
 esac

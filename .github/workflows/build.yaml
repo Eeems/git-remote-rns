@@ -136,6 +136,8 @@ jobs:
           - ppc64le
           - aarch64
           - armv7l
+          - riscv64
+          - s390x
         libc:
           - glibc
           - musl
