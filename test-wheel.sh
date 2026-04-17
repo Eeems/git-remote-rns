@@ -20,6 +20,9 @@ script=$(
 	cat <<EOF
 cd /src;
 pip install "${wheel}"[web,test];
+git config --global user.email 'root@localhost'
+git config --global user.name "Github Runner"
+git config --global init.defaultBranch trunk
 python -m pytest -vv tests/;
 EOF
 )
