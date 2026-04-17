@@ -12,6 +12,14 @@ jobs:
   lint:
     name: Lint codebase
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: &python-versions
+          - "3.11"
+          - "3.12"
+          - "3.13"
+          - "3.14"
+      fail-fast: false
     steps:
       - name: Checkout the Git repository
         uses: actions/checkout@v6
@@ -29,11 +37,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python: &python-versions
-          - "3.11"
-          - "3.12"
-          - "3.13"
-          - "3.14"
+        python: *python-versions
       fail-fast: false
     steps:
       - name: Checkout the Git repository
