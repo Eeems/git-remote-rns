@@ -466,9 +466,9 @@ class TestPublicAccess:
             result = stack.run_client("list\n\n")
             output = result.stdout + result.stderr
             assert "refs/heads" in output, (
-                f"Expected refs/heads in output, got: {output}"
+                "Expected refs/heads in output"
             )
-            assert "HEAD" in output, f"Expected HEAD in output, got: {output}"
+            assert "HEAD" in output, "Expected HEAD in output"
 
         finally:
             stack.cleanup()
@@ -539,7 +539,7 @@ class TestAllowRead:
             result = stack.run_client("list\n\n", cwd=client_repo)
             output = result.stdout + result.stderr
             assert "refs/heads" in output, (
-                f"Expected refs/heads in output, got: {output}"
+                "Expected refs/heads in output"
             )
 
         finally:
@@ -579,8 +579,9 @@ class TestAllowRead:
         try:
             result = stack.run_client("list for-push\n\n")
             output = result.stdout + result.stderr
-            assert "Not allowed" in output or result.returncode != 0, (
-                f"Expected list-for-push to fail without write access, got: {output}"
+            assert result.returncode != 0, "Expected non-zero return code"
+            assert "Not allowed" in output, (
+                "Expected list-for-push to fail without write access"
             )
 
         finally:
@@ -611,8 +612,9 @@ class TestAllowRead:
                 identity_path=alt_identity_path,
             )
             output = result.stdout + result.stderr
-            assert "Not allowed" in output or result.returncode != 0, (
-                f"Expected wrong identity to be denied, got: {output}"
+            assert result.returncode != 0, "Expected non-zero return code"
+            assert "Not allowed" in output, (
+                "Expected wrong identity to be denied"
             )
 
         finally:
@@ -635,7 +637,7 @@ class TestAllowWrite:
             result = stack.run_client("list\n\n")
             output = result.stdout + result.stderr
             assert "refs/heads" in output, (
-                f"Expected refs/heads in output, got: {output}"
+                "Expected refs/heads in output"
             )
 
         finally:
@@ -676,7 +678,7 @@ class TestAllowWrite:
             result = stack.run_client("list for-push\n\n")
             output = result.stdout + result.stderr
             assert "Not allowed" not in output, (
-                f"Expected list-for-push to work with write access, got: {output}"
+                "Expected list-for-push to work with write access"
             )
 
         finally:
@@ -920,9 +922,10 @@ class TestAllowWrite:
                 identity_path=alt_identity_path,
             )
             output = result.stdout + result.stderr
-            assert "Not allowed" in output or result.returncode != 0, (
-                f"Expected wrong identity to be denied, got: {output}"
+            assert 'error refs/heads/main "Remote error: Not allowed"' in output, (
+                "Expected 'error refs/heads/main \"Remote error: Not allowed\"' error message"
             )
+            assert result.returncode == 0, "Expected failed push to have zero exit code"
 
         finally:
             stack.cleanup()
