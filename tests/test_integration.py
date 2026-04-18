@@ -610,6 +610,7 @@ class TestAllowRead:
             result = stack.run_client(
                 "list\n\n",
                 identity_path=alt_identity_path,
+                cwd=repo_dir,
             )
             output = result.stdout + result.stderr
             assert result.returncode != 0, "Expected non-zero return code"
