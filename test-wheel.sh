@@ -4,7 +4,7 @@ libc=${libc:-glibc}
 arch=${arch:-x86_64}
 python=${python:-3.11}
 
-wheel="$(find dist -name "*linux_${arch}.whl" | head -n1)"
+wheel="$(find wheelhouse -name "*linux_${arch}.whl" | head -n1)"
 script=$(
   cat <<EOF
 cd /src;
@@ -39,7 +39,7 @@ riscv64)
   ;;
 ppc64le)
   if [[ "$libc" == "musl" ]]; then
-    echo "WARNING: Unable to test ppc64ls on musl as not all dependencies have wheels for it. Skipping without error for now."
+    echo "WARNING: Unable to test ppc64le on musl as not all dependencies have wheels for it. Skipping without error for now."
     exit 0
   fi
   platform="linux/${arch}"
