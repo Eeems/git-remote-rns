@@ -60,7 +60,7 @@ def shared_rnsd() -> Generator[Path, Any, None]:  # pyright: ignore[reportExplic
 
     # Wait for rnsd to be up
     tries = 3
-    timeout = 5
+    timeout = 10
     start = time.time()
     rnsd_proc = None
     remaining = tries
@@ -111,7 +111,7 @@ def shared_rnsd() -> Generator[Path, Any, None]:  # pyright: ignore[reportExplic
 
         rnsd_proc.terminate()
         try:
-            _ = rnsd_proc.wait(timeout=5)
+            _ = rnsd_proc.wait(timeout=10)
 
         except subprocess.TimeoutExpired:
             rnsd_proc.kill()
