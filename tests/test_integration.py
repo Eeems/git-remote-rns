@@ -981,7 +981,7 @@ class TestNoAuth:
             result = stack.run_client("push HEAD:refs/heads/main\n\n", cwd=repo_dir)
             output = result.stdout + result.stderr
             assert 'error refs/heads/main "Remote error: Not allowed"' in output, (
-                "Expected 'Remote error: Not allowed' error message"
+                "Expected 'error refs/heads/main \"Remote error: Not allowed\"' error message"
             )
             assert result.returncode == 0, "Expected failed push to have zero exit code"
         finally:
