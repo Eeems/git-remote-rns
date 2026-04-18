@@ -25,7 +25,7 @@ jobs:
         uses: actions/checkout@v6
       - uses: actions/setup-python@v6
         with:
-          python-version: 3.11
+          python-version: ${{ matrix.python }}
           cache: "pip"
       - name: Run lint
         run: |
