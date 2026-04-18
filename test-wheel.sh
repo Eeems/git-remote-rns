@@ -4,7 +4,7 @@ libc=${libc:-glibc}
 arch=${arch:-x86_64}
 python=${python:-3.11}
 
-wheel="$(find wheelhouse -name "*linux_${arch}.whl" | head -n1)"
+wheel="$(find wheelhouse -name "*_${arch}.whl" | head -n1)"
 script=$(
   cat <<EOF
 cd /src;
