@@ -241,8 +241,8 @@ dist:
 .PHONY: wheel
 wheel: dist/${PACKAGE}-${VERSION}-py3-none-any.whl ## Build wheel
 
-.PHONY: native-wheel ## Build native wheel
-native-wheel: dist/${PACKAGE}-${VERSION}-${ABI}-${ABI}-${PLATFORM}.whl
+.PHONY: native-wheel
+native-wheel: dist/${PACKAGE}-${VERSION}-${ABI}-${ABI}-${PLATFORM}.whl ## Build native wheel
 
 .PHONY: sdist
 sdist: dist/${PACKAGE}-${VERSION}.tar.gz ## Build sdist

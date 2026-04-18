@@ -1007,6 +1007,6 @@ class TestNoAuth:
             assert "Remote error: Not allowed" in output, (
                 "Expected 'Remote error: Not allowed' error message"
             )
-            assert result.returncode != 0, "Expected push to fail without auth"
+            assert result.returncode != 0, "Expected fetch to fail without auth"
         finally:
             stack.cleanup()
