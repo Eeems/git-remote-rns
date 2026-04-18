@@ -942,9 +942,10 @@ class TestNoAuth:
         try:
             result = stack.run_client("list\n\n")
             output = result.stdout + result.stderr
-            assert "Not allowed" in output or result.returncode != 0, (
-                f"Expected list to fail without auth, got: {output}"
+            assert result.returncode != 0, (
+                "Expected failed list to have non-zero exit code"
             )
+            assert "Not allowed" in output, "Expected list to fail without auth"
         finally:
             stack.cleanup()
 
@@ -961,8 +962,11 @@ class TestNoAuth:
         try:
             result = stack.run_client("list for-push\n\n")
             output = result.stdout + result.stderr
-            assert "Not allowed" in output or result.returncode != 0, (
-                f"Expected list-for-push to fail without auth, got: {output}"
+            assert "Not allowed" in output, (
+                "Expected list-for-push to fail without auth"
+            )
+            assert result.returncode != 0, (
+                "Expected failed list for-push to have non-zero exit code"
             )
         finally:
             stack.cleanup()
