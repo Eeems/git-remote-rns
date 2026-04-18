@@ -921,6 +921,7 @@ class TestAllowWrite:
             result = stack.run_client(
                 "push HEAD:refs/heads/main\n\n",
                 identity_path=alt_identity_path,
+                cwd=repo_dir,
             )
             output = result.stdout + result.stderr
             assert 'error refs/heads/main "Remote error: Not allowed"' in output, (
