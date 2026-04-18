@@ -978,11 +978,12 @@ class TestNoAuth:
         stack.init_git_repo(repo_dir)
         stack.start_server()
         try:
-            result = stack.run_client("push HEAD:refs/heads/main\n\n")
+            result = stack.run_client("push HEAD:refs/heads/main\n\n", cwd=repo_dir)
             output = result.stdout + result.stderr
-            assert "Not allowed" in output or result.returncode != 0, (
-                f"Expected push to fail without auth, got: {output}"
+            assert 'error refs/heads/main "Remote error: Not allowed"' in output, (
+                "Expected 'Remote error: Not allowed' error message"
             )
+            assert result.returncode == 0, "Expected failed push to have zero exit code"
         finally:
             stack.cleanup()
 
@@ -999,8 +1000,9 @@ class TestNoAuth:
         try:
             result = stack.run_client("fetch HEAD refs/heads/main\n\n")
             output = result.stdout + result.stderr
-            assert "Not allowed" in output or result.returncode != 0, (
-                f"Expected fetch to fail without auth, got: {output}"
+            assert "Remote error: Not allowed" in output, (
+                "Expected 'Remote error: Not allowed' error message"
             )
+            assert result.returncode != 0, "Expected push to fail without auth"
         finally:
             stack.cleanup()
