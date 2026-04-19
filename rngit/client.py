@@ -302,8 +302,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return ExitCodes.EXCEPTION.value
 
     finally:
-        stdout.detach()
-        stderr.detach()
+        _ = stdout.detach()
+        _ = stderr.detach()
 
     return ExitCodes.SUCCESS.value
 
