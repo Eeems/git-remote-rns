@@ -2,7 +2,7 @@ import sys
 from collections.abc import Callable
 from typing import NoReturn
 
-def _exec(fn: Callable[[], None]) -> NoReturn:
+def _exec(fn: Callable[[], int]) -> NoReturn:
     res = fn()
     if "--verbose" in sys.argv:
         print(f"Exit code: {res}", file=sys.stderr)
