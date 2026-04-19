@@ -19,6 +19,7 @@ import pytest
 import RNS
 
 import rngit
+from rngit.shared import ExitCodes
 
 
 class SetupError(RuntimeError):
@@ -585,7 +586,9 @@ class TestAllowRead:
         try:
             result = stack.run_client("list for-push\n\n")
             output = result.stdout + result.stderr
-            assert result.returncode != 0, "Expected non-zero return code"
+            assert result.returncode == ExitCodes.REMOTE_ERROR.value, (
+                "Expected REMOTE_ERROR return code"
+            )
             assert "Not allowed" in output, (
                 "Expected list-for-push to fail without write access"
             )
@@ -619,7 +622,9 @@ class TestAllowRead:
                 cwd=repo_dir,
             )
             output = result.stdout + result.stderr
-            assert result.returncode != 0, "Expected non-zero return code"
+            assert result.returncode == ExitCodes.REMOTE_ERROR.value, (
+                "Expected REMOTE_ERROR return code"
+            )
             assert "Not allowed" in output, "Expected wrong identity to be denied"
 
         finally:
@@ -951,8 +956,8 @@ class TestNoAuth:
         try:
             result = stack.run_client("list\n\n")
             output = result.stdout + result.stderr
-            assert result.returncode != 0, (
-                "Expected failed list to have non-zero exit code"
+            assert result.returncode == ExitCodes.REMOTE_ERROR.value, (
+                "Expected REMOTE_ERROR exit code"
             )
             assert "Not allowed" in output, "Expected list to fail without auth"
         finally:
@@ -974,8 +979,8 @@ class TestNoAuth:
             assert "Not allowed" in output, (
                 "Expected list-for-push to fail without auth"
             )
-            assert result.returncode != 0, (
-                "Expected failed list for-push to have non-zero exit code"
+            assert result.returncode == ExitCodes.REMOTE_ERROR.value, (
+                "Expected REMOTE_ERROR exit code"
             )
         finally:
             stack.cleanup()
@@ -1016,6 +1021,8 @@ class TestNoAuth:
             assert "Remote error: Not allowed" in output, (
                 "Expected 'Remote error: Not allowed' error message"
             )
-            assert result.returncode != 0, "Expected fetch to fail without auth"
+            assert result.returncode == ExitCodes.REMOTE_ERROR.value, (
+                "Expected REMOTE_ERROR exit code"
+            )
         finally:
             stack.cleanup()
