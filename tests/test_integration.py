@@ -295,23 +295,22 @@ class IntegrationStack:
         if identity_path:
             flags.append(f"--identity={identity_path}")
 
-        args = [
-            *(
-                []
-                if hasattr(rngit, "__compiled__")
-                else [
-                    sys.executable,
-                    "-m",
-                    "rngit",
-                ]
-            ),
-            "git-remote-rns",
-            *flags,
-            "origin",
-            self.server_hash,
-        ]
         proc = subprocess.run(
-            args,
+            [
+                *(
+                    []
+                    if hasattr(rngit, "__compiled__")
+                    else [
+                        sys.executable,
+                        "-m",
+                        "rngit",
+                    ]
+                ),
+                "git-remote-rns",
+                *flags,
+                "origin",
+                self.server_hash,
+            ],
             cwd=cwd,
             env={
                 **os.environ,
@@ -326,6 +325,11 @@ class IntegrationStack:
         )
         print(f"CLIENT STDOUT: {proc.stdout}")
         print(f"CLIENT STDERR: {proc.stderr}")
+        # Work around bug where subprocess.run is not getting the actual return code
+        if "git-remote-rns [DEBUG] Exit code: " in proc.stderr:
+            idx = proc.stderr.find("git-remote-rns [DEBUG] Exit code: ") + 34
+            proc.returncode = int(proc.stderr[idx : proc.stderr.find("\n", idx)])
+
         return proc
 
     def get_client_identity(self) -> str:
