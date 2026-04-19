@@ -326,6 +326,10 @@ class IntegrationStack:
         print(f"CLIENT STDOUT: {proc.stdout}")
         print(f"CLIENT STDERR: {proc.stderr}")
         # Work around bug where subprocess.run is not getting the actual return code
+        # the best guess I have is that it's something with child process reaping due
+        # to a waitpid call happening in pytest or something. I'm done trying to figure
+        # it out though. I know the returncode by the process is correct, and being
+        # reported as 0 instead of the correct value by subprocess.run()
         if "git-remote-rns [DEBUG] Exit code: " in proc.stderr:
             idx = proc.stderr.find("git-remote-rns [DEBUG] Exit code: ") + 34
             proc.returncode = int(proc.stderr[idx : proc.stderr.find("\n", idx)])
