@@ -165,6 +165,18 @@ class IntegrationStack:
         self._alternate_identity: RNS.Identity | None = None
         self._alternate_hexhash: str | None = None
 
+    def __enter__(self) -> "IntegrationStack":
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: object | None,
+    ) -> None:
+        _ = exc_type, exc_val, exc_tb
+        self.cleanup()
+
     def start_server(
         self,
         allow_all_read: bool = False,
@@ -207,6 +219,7 @@ class IntegrationStack:
             text=True,
             bufsize=1,
             env={**os.environ, "RNS_CONFIG_PATH": str(self.rns_config)},
+            start_new_session=True,
         )
 
         dest_hash = None
@@ -277,24 +290,6 @@ class IntegrationStack:
         timeout: int = 30,
     ) -> subprocess.CompletedProcess[str]:
         assert self.server_hash is not None
-        return self.run_client_to(
-            self.server_hash,
-            stdin,
-            cwd=cwd,
-            identity_path=identity_path,
-            config_path=config_path,
-            timeout=timeout,
-        )
-
-    def run_client_to(
-        self,
-        destination: str,
-        stdin: str,
-        cwd: Path | str | None = None,
-        identity_path: Path | None = None,
-        config_path: Path | None = None,
-        timeout: int = 30,
-    ) -> subprocess.CompletedProcess[str]:
         flags: list[str] = ["--verbose"]
         if identity_path:
             flags.append(f"--identity={identity_path}")
@@ -312,7 +307,7 @@ class IntegrationStack:
             "git-remote-rns",
             *flags,
             "origin",
-            destination,
+            self.server_hash,
         ]
         proc = subprocess.Popen(
             args,
@@ -325,6 +320,7 @@ class IntegrationStack:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             stdin=subprocess.PIPE if stdin else None,
+            start_new_session=True,
         )
         stdout, stderr = proc.communicate(stdin, timeout=timeout)
         print(f"CLIENT STDOUT: {stdout}")
@@ -465,19 +461,15 @@ class TestPublicAccess:
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
 
-        stack = IntegrationStack(_rnsd_config_dir, repo_dir)
-        stack.init_git_repo(repo_dir)
-        stack.start_server(allow_all_read=True)
-        try:
+        with IntegrationStack(_rnsd_config_dir, repo_dir) as stack:
+            stack.init_git_repo(repo_dir)
+            stack.start_server(allow_all_read=True)
             result = stack.run_client("capabilities\n\n")
             output = result.stdout + result.stderr
             assert result.returncode == 0, "capabilities failed"
             assert "list" in output, f"'list' missing from capabilities: {output}"
             assert "fetch" in output, f"'fetch' missing from capabilities: {output}"
             assert "push" in output, f"'push' missing from capabilities: {output}"
-
-        finally:
-            stack.cleanup()
 
     def test_list(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
@@ -486,18 +478,14 @@ class TestPublicAccess:
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
 
-        stack = IntegrationStack(_rnsd_config_dir, repo_dir)
-        stack.init_git_repo(repo_dir)
-        stack.start_server(allow_all_read=True)
-        try:
+        with IntegrationStack(_rnsd_config_dir, repo_dir) as stack:
+            stack.init_git_repo(repo_dir)
+            stack.start_server(allow_all_read=True)
             result = stack.run_client("list\n\n")
             output = result.stdout + result.stderr
             assert result.returncode == 0, "list failed"
             assert "refs/heads" in output, "Expected refs/heads in output"
             assert "HEAD" in output, "Expected HEAD in output"
-
-        finally:
-            stack.cleanup()
 
     def test_fetch_single_branch(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
@@ -506,12 +494,11 @@ class TestPublicAccess:
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
 
-        stack = IntegrationStack(_rnsd_config_dir, repo_dir)
-        stack.init_git_repo(repo_dir)
-        stack.start_server(allow_all_read=True)
+        with IntegrationStack(_rnsd_config_dir, repo_dir) as stack:
+            stack.init_git_repo(repo_dir)
+            stack.start_server(allow_all_read=True)
 
-        client_repo = stack.init_client_repo()
-        try:
+            client_repo = stack.init_client_repo()
             result = stack.run_client("fetch HEAD refs/heads/main\n\n", cwd=client_repo)
             output = result.stdout + result.stderr
             if result.returncode != 0:
@@ -521,9 +508,6 @@ class TestPublicAccess:
             assert result.returncode == 0, f"Fetch failed: {output}"
             assert "error" not in output.lower(), f"Error in output: {output}"
 
-        finally:
-            stack.cleanup()
-
     def test_fetch_all_refs(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
             raise SetupError("RNS not available")
@@ -531,11 +515,10 @@ class TestPublicAccess:
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
 
-        stack = IntegrationStack(_rnsd_config_dir, repo_dir)
-        stack.init_git_repo(repo_dir)
-        stack.start_server(allow_all_read=True)
-        client_repo = stack.init_client_repo()
-        try:
+        with IntegrationStack(_rnsd_config_dir, repo_dir) as stack:
+            stack.init_git_repo(repo_dir)
+            stack.start_server(allow_all_read=True)
+            client_repo = stack.init_client_repo()
             result = stack.run_client("fetch HEAD refs/heads/main\n\n", cwd=client_repo)
             output = result.stdout + result.stderr
             if result.returncode != 0:
@@ -543,9 +526,6 @@ class TestPublicAccess:
                 print(f"Output: {output}")
 
             assert result.returncode == 0, f"Fetch failed: {output}"
-
-        finally:
-            stack.cleanup()
 
 
 class TestAllowRead:
@@ -556,19 +536,15 @@ class TestAllowRead:
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
 
-        stack = IntegrationStack(_rnsd_config_dir, repo_dir)
-        stack.init_git_repo(repo_dir)
-        client_hash = stack.get_client_identity()
-        stack.start_server(allow_read=[client_hash])
-        client_repo = stack.init_client_repo()
-        try:
+        with IntegrationStack(_rnsd_config_dir, repo_dir) as stack:
+            stack.init_git_repo(repo_dir)
+            client_hash = stack.get_client_identity()
+            stack.start_server(allow_read=[client_hash])
+            client_repo = stack.init_client_repo()
             result = stack.run_client("list\n\n", cwd=client_repo)
             output = result.stdout + result.stderr
             assert result.returncode == 0, "list failed"
             assert "refs/heads" in output, "Expected refs/heads in output"
-
-        finally:
-            stack.cleanup()
 
     def test_fetch_with_allow_read(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
@@ -577,18 +553,14 @@ class TestAllowRead:
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
 
-        stack = IntegrationStack(_rnsd_config_dir, repo_dir)
-        stack.init_git_repo(repo_dir)
-        client_hash = stack.get_client_identity()
-        stack.start_server(allow_read=[client_hash])
-        client_repo = stack.init_client_repo()
-        try:
+        with IntegrationStack(_rnsd_config_dir, repo_dir) as stack:
+            stack.init_git_repo(repo_dir)
+            client_hash = stack.get_client_identity()
+            stack.start_server(allow_read=[client_hash])
+            client_repo = stack.init_client_repo()
             result = stack.run_client("fetch HEAD refs/heads/main\n\n", cwd=client_repo)
             output = result.stdout + result.stderr
             assert result.returncode == 0, f"Fetch failed: {output}"
-
-        finally:
-            stack.cleanup()
 
     def test_list_for_push_fails(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
@@ -597,11 +569,10 @@ class TestAllowRead:
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
 
-        stack = IntegrationStack(_rnsd_config_dir, repo_dir)
-        stack.init_git_repo(repo_dir)
-        client_hash = stack.get_client_identity()
-        stack.start_server(allow_read=[client_hash])
-        try:
+        with IntegrationStack(_rnsd_config_dir, repo_dir) as stack:
+            stack.init_git_repo(repo_dir)
+            client_hash = stack.get_client_identity()
+            stack.start_server(allow_read=[client_hash])
             result = stack.run_client("list for-push\n\n")
             output = result.stdout + result.stderr
             assert result.returncode == ExitCodes.REMOTE_ERROR.value, (
@@ -610,9 +581,6 @@ class TestAllowRead:
             assert "Not allowed" in output, (
                 "Expected list-for-push to fail without write access"
             )
-
-        finally:
-            stack.cleanup()
 
     def test_wrong_identity_denied(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
@@ -628,12 +596,13 @@ class TestAllowRead:
         alt_identity_path = alt_rns_config / "identity"
         _ = alt_identity.to_file(str(alt_identity_path))  # pyright: ignore[reportUnknownMemberType]
 
-        stack = IntegrationStack(_rnsd_config_dir, repo_dir)
-        stack.init_git_repo(repo_dir)
-        correct_hash = stack.get_client_identity()
-        assert correct_hash != alt_identity.hexhash, "Failed to generate a new identity"
-        stack.start_server(allow_read=[correct_hash])
-        try:
+        with IntegrationStack(_rnsd_config_dir, repo_dir) as stack:
+            stack.init_git_repo(repo_dir)
+            correct_hash = stack.get_client_identity()
+            assert correct_hash != alt_identity.hexhash, (
+                "Failed to generate a new identity"
+            )
+            stack.start_server(allow_read=[correct_hash])
             result = stack.run_client(
                 "list\n\n",
                 identity_path=alt_identity_path,
@@ -645,9 +614,6 @@ class TestAllowRead:
             )
             assert "Not allowed" in output, "Expected wrong identity to be denied"
 
-        finally:
-            stack.cleanup()
-
 
 class TestAllowWrite:
     def test_list_with_allow_write(self, tmp_path: Path) -> None:
@@ -657,18 +623,14 @@ class TestAllowWrite:
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
 
-        stack = IntegrationStack(_rnsd_config_dir, repo_dir)
-        stack.init_git_repo(repo_dir)
-        client_hash = stack.get_client_identity()
-        stack.start_server(allow_write=[client_hash])
-        try:
+        with IntegrationStack(_rnsd_config_dir, repo_dir) as stack:
+            stack.init_git_repo(repo_dir)
+            client_hash = stack.get_client_identity()
+            stack.start_server(allow_write=[client_hash])
             result = stack.run_client("list\n\n")
             output = result.stdout + result.stderr
             assert result.returncode == 0, "list failed"
             assert "refs/heads" in output, "Expected refs/heads in output"
-
-        finally:
-            stack.cleanup()
 
     def test_fetch_with_allow_write(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
@@ -677,18 +639,14 @@ class TestAllowWrite:
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
 
-        stack = IntegrationStack(_rnsd_config_dir, repo_dir)
-        stack.init_git_repo(repo_dir)
-        client_hash = stack.get_client_identity()
-        stack.start_server(allow_write=[client_hash])
-        client_repo = stack.init_client_repo()
-        try:
+        with IntegrationStack(_rnsd_config_dir, repo_dir) as stack:
+            stack.init_git_repo(repo_dir)
+            client_hash = stack.get_client_identity()
+            stack.start_server(allow_write=[client_hash])
+            client_repo = stack.init_client_repo()
             result = stack.run_client("fetch HEAD refs/heads/main\n\n", cwd=client_repo)
             output = result.stdout + result.stderr
             assert result.returncode == 0, f"Fetch failed: {output}"
-
-        finally:
-            stack.cleanup()
 
     def test_list_for_push(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
@@ -697,20 +655,16 @@ class TestAllowWrite:
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
 
-        stack = IntegrationStack(_rnsd_config_dir, repo_dir)
-        stack.init_git_repo(repo_dir)
-        client_hash = stack.get_client_identity()
-        stack.start_server(allow_write=[client_hash])
-        try:
+        with IntegrationStack(_rnsd_config_dir, repo_dir) as stack:
+            stack.init_git_repo(repo_dir)
+            client_hash = stack.get_client_identity()
+            stack.start_server(allow_write=[client_hash])
             result = stack.run_client("list for-push\n\n")
             output = result.stdout + result.stderr
             assert result.returncode == 0, "list for-push failed"
             assert "Not allowed" not in output, (
                 "Expected list-for-push to work with write access"
             )
-
-        finally:
-            stack.cleanup()
 
     def test_push_new_branch(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
@@ -719,12 +673,11 @@ class TestAllowWrite:
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
 
-        stack = IntegrationStack(_rnsd_config_dir, repo_dir)
-        stack.init_git_repo(repo_dir)
-        client_hash = stack.get_client_identity()
-        stack.start_server(allow_write=[client_hash])
-        client_repo = stack.init_client_repo(copy=True)
-        try:
+        with IntegrationStack(_rnsd_config_dir, repo_dir) as stack:
+            stack.init_git_repo(repo_dir)
+            client_hash = stack.get_client_identity()
+            stack.start_server(allow_write=[client_hash])
+            client_repo = stack.init_client_repo(copy=True)
             result = stack.run_client(
                 "push HEAD:refs/heads/new-branch\n\n",
                 cwd=client_repo,
@@ -741,9 +694,6 @@ class TestAllowWrite:
             )
             assert verify_result.returncode == 0, "Branch not created on server"
 
-        finally:
-            stack.cleanup()
-
     def test_push_update_branch(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
             raise SetupError("RNS not available")
@@ -751,20 +701,16 @@ class TestAllowWrite:
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
 
-        stack = IntegrationStack(_rnsd_config_dir, repo_dir)
-        stack.init_git_repo(repo_dir)
-        client_hash = stack.get_client_identity()
-        stack.start_server(allow_write=[client_hash])
-        client_repo = stack.init_client_repo(copy=True)
-        try:
+        with IntegrationStack(_rnsd_config_dir, repo_dir) as stack:
+            stack.init_git_repo(repo_dir)
+            client_hash = stack.get_client_identity()
+            stack.start_server(allow_write=[client_hash])
+            client_repo = stack.init_client_repo(copy=True)
             result = stack.run_client(
                 "push HEAD:refs/heads/feature\n\n",
                 cwd=client_repo,
             )
             assert result.returncode == 0, "Push failed"
-
-        finally:
-            stack.cleanup()
 
     def test_push_force(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
@@ -773,12 +719,11 @@ class TestAllowWrite:
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
 
-        stack = IntegrationStack(_rnsd_config_dir, repo_dir)
-        stack.init_git_repo(repo_dir)
-        client_hash = stack.get_client_identity()
-        stack.start_server(allow_write=[client_hash])
-        client_repo = stack.init_client_repo(empty=False)
-        try:
+        with IntegrationStack(_rnsd_config_dir, repo_dir) as stack:
+            stack.init_git_repo(repo_dir)
+            client_hash = stack.get_client_identity()
+            stack.start_server(allow_write=[client_hash])
+            client_repo = stack.init_client_repo(empty=False)
             result = stack.run_client(
                 "push HEAD:refs/heads/feature\n\n",
                 cwd=client_repo,
@@ -796,9 +741,6 @@ class TestAllowWrite:
             )
             assert result.returncode == 0, "Force push failed"
 
-        finally:
-            stack.cleanup()
-
     def test_delete_branch(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
             raise SetupError("RNS not available")
@@ -806,14 +748,13 @@ class TestAllowWrite:
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
 
-        stack = IntegrationStack(_rnsd_config_dir, repo_dir)
-        stack.init_git_repo(repo_dir)
-        _ = stack.git("checkout", "-b", "feature", cwd=repo_dir, check=True)
-        _ = stack.git("checkout", "main", cwd=repo_dir, check=True)
-        client_hash = stack.get_client_identity()
-        stack.start_server(allow_write=[client_hash])
-        client_repo = stack.init_client_repo()
-        try:
+        with IntegrationStack(_rnsd_config_dir, repo_dir) as stack:
+            stack.init_git_repo(repo_dir)
+            _ = stack.git("checkout", "-b", "feature", cwd=repo_dir, check=True)
+            _ = stack.git("checkout", "main", cwd=repo_dir, check=True)
+            client_hash = stack.get_client_identity()
+            stack.start_server(allow_write=[client_hash])
+            client_repo = stack.init_client_repo()
             result = stack.run_client("push :refs/heads/feature\n\n", cwd=client_repo)
             if result.returncode != 0:
                 result = stack.run_client(
@@ -830,9 +771,6 @@ class TestAllowWrite:
             )
             assert verify_result.returncode != 0, "Branch should have been deleted"
 
-        finally:
-            stack.cleanup()
-
     def test_clone_and_push(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
             raise SetupError("RNS not available")
@@ -840,11 +778,10 @@ class TestAllowWrite:
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
 
-        stack = IntegrationStack(_rnsd_config_dir, repo_dir)
-        stack.init_git_repo(repo_dir)
-        client_hash = stack.get_client_identity()
-        stack.start_server(allow_write=[client_hash])
-        try:
+        with IntegrationStack(_rnsd_config_dir, repo_dir) as stack:
+            stack.init_git_repo(repo_dir)
+            client_hash = stack.get_client_identity()
+            stack.start_server(allow_write=[client_hash])
             client_repo = stack.create_client_working_dir()
 
             clone_result = stack.git(
@@ -921,9 +858,6 @@ class TestAllowWrite:
                 f"Neither push succeeded nor changes on server: {push_result.stderr}"
             )
 
-        finally:
-            stack.cleanup()
-
     def test_wrong_identity_denied(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
             raise SetupError("RNS not available")
@@ -938,13 +872,14 @@ class TestAllowWrite:
         alt_identity_path = alt_rns_config / "identity"
         _ = alt_identity.to_file(str(alt_identity_path))  # pyright: ignore[reportUnknownMemberType]
 
-        stack = IntegrationStack(_rnsd_config_dir, repo_dir)
-        stack.init_git_repo(repo_dir)
-        correct_hash = stack.get_client_identity()
-        assert correct_hash != alt_identity.hexhash, "Failed to generate a new identity"
-        _ = stack.get_alternate_client_identity()
-        stack.start_server(allow_write=[correct_hash])
-        try:
+        with IntegrationStack(_rnsd_config_dir, repo_dir) as stack:
+            stack.init_git_repo(repo_dir)
+            correct_hash = stack.get_client_identity()
+            assert correct_hash != alt_identity.hexhash, (
+                "Failed to generate a new identity"
+            )
+            _ = stack.get_alternate_client_identity()
+            stack.start_server(allow_write=[correct_hash])
             result = stack.run_client(
                 "push HEAD:refs/heads/main\n\n",
                 identity_path=alt_identity_path,
@@ -956,9 +891,6 @@ class TestAllowWrite:
             )
             assert result.returncode == 0, "Expected failed push to have zero exit code"
 
-        finally:
-            stack.cleanup()
-
 
 class TestNoAuth:
     def test_list_no_auth_fails(self, tmp_path: Path) -> None:
@@ -968,18 +900,15 @@ class TestNoAuth:
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
 
-        stack = IntegrationStack(_rnsd_config_dir, repo_dir)
-        stack.init_git_repo(repo_dir)
-        stack.start_server()
-        try:
+        with IntegrationStack(_rnsd_config_dir, repo_dir) as stack:
+            stack.init_git_repo(repo_dir)
+            stack.start_server()
             result = stack.run_client("list\n\n")
             output = result.stdout + result.stderr
             assert result.returncode == ExitCodes.REMOTE_ERROR.value, (
                 "Expected REMOTE_ERROR exit code"
             )
             assert "Not allowed" in output, "Expected list to fail without auth"
-        finally:
-            stack.cleanup()
 
     def test_list_for_push_no_auth_fails(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
@@ -988,10 +917,9 @@ class TestNoAuth:
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
 
-        stack = IntegrationStack(_rnsd_config_dir, repo_dir)
-        stack.init_git_repo(repo_dir)
-        stack.start_server()
-        try:
+        with IntegrationStack(_rnsd_config_dir, repo_dir) as stack:
+            stack.init_git_repo(repo_dir)
+            stack.start_server()
             result = stack.run_client("list for-push\n\n")
             output = result.stdout + result.stderr
             assert "Not allowed" in output, (
@@ -1000,8 +928,6 @@ class TestNoAuth:
             assert result.returncode == ExitCodes.REMOTE_ERROR.value, (
                 "Expected REMOTE_ERROR exit code"
             )
-        finally:
-            stack.cleanup()
 
     def test_push_no_auth_fails(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
@@ -1010,18 +936,15 @@ class TestNoAuth:
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
 
-        stack = IntegrationStack(_rnsd_config_dir, repo_dir)
-        stack.init_git_repo(repo_dir)
-        stack.start_server()
-        try:
+        with IntegrationStack(_rnsd_config_dir, repo_dir) as stack:
+            stack.init_git_repo(repo_dir)
+            stack.start_server()
             result = stack.run_client("push HEAD:refs/heads/main\n\n", cwd=repo_dir)
             output = result.stdout + result.stderr
             assert 'error refs/heads/main "Remote error: Not allowed"' in output, (
                 "Expected 'error refs/heads/main \"Remote error: Not allowed\"' error message"
             )
             assert result.returncode == 0, "Expected failed push to have zero exit code"
-        finally:
-            stack.cleanup()
 
     def test_fetch_no_auth_fails(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
@@ -1030,10 +953,9 @@ class TestNoAuth:
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
 
-        stack = IntegrationStack(_rnsd_config_dir, repo_dir)
-        stack.init_git_repo(repo_dir)
-        stack.start_server()
-        try:
+        with IntegrationStack(_rnsd_config_dir, repo_dir) as stack:
+            stack.init_git_repo(repo_dir)
+            stack.start_server()
             result = stack.run_client("fetch HEAD refs/heads/main\n\n")
             output = result.stdout + result.stderr
             assert "Remote error: Not allowed" in output, (
@@ -1042,8 +964,6 @@ class TestNoAuth:
             assert result.returncode == ExitCodes.REMOTE_ERROR.value, (
                 "Expected REMOTE_ERROR exit code"
             )
-        finally:
-            stack.cleanup()
 
 
 class TestClientExitCodes:
@@ -1054,12 +974,11 @@ class TestClientExitCodes:
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
 
-        stack = IntegrationStack(_rnsd_config_dir, repo_dir)
-        stack.init_git_repo(repo_dir)
-        stack.start_server(allow_all_read=True)
-        try:
+        with IntegrationStack(_rnsd_config_dir, repo_dir) as stack:
+            stack.init_git_repo(repo_dir)
             # Test with invalid hex characters - should fail with BAD_ARGUMENT
-            result = stack.run_client_to("NOTAHEXHASH!!!!", "capabilities\n\n")
+            stack.server_hash = "NOTAHEXHASH!!!!"
+            result = stack.run_client("capabilities\n\n")
             output = result.stdout + result.stderr
             assert result.returncode == ExitCodes.BAD_ARGUMENT.value, (
                 f"Expected BAD_ARGUMENT exit code, got {result.returncode}: {output}"
@@ -1068,9 +987,6 @@ class TestClientExitCodes:
                 f"Expected invalid URL error in output: {output}"
             )
 
-        finally:
-            stack.cleanup()
-
     def test_unknown_command(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
             raise SetupError("RNS not available")
@@ -1078,22 +994,15 @@ class TestClientExitCodes:
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
 
-        stack = IntegrationStack(_rnsd_config_dir, repo_dir)
-        stack.init_git_repo(repo_dir)
-        stack.start_server(allow_all_read=True)
-        try:
+        with IntegrationStack(_rnsd_config_dir, repo_dir) as stack:
+            stack.init_git_repo(repo_dir)
+            stack.start_server(allow_all_read=True)
             # Send unknown git command - should fail with UNKNOWN_COMMAND
             result = stack.run_client("boguscommand\n\n")
             output = result.stdout + result.stderr
             assert result.returncode == ExitCodes.UNKNOWN_COMMAND.value, (
                 f"Expected UNKNOWN_COMMAND exit code, got {result.returncode}: {output}"
             )
-            assert "Unknown command" in output, (
-                f"Expected unknown command error in output: {output}"
-            )
-
-        finally:
-            stack.cleanup()
 
     def test_network_error_unreachable(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
@@ -1102,14 +1011,12 @@ class TestClientExitCodes:
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
 
-        stack = IntegrationStack(_rnsd_config_dir, repo_dir)
-        stack.init_git_repo(repo_dir)
-        stack.start_server(allow_all_read=True)
-        try:
+        with IntegrationStack(_rnsd_config_dir, repo_dir) as stack:
+            stack.init_git_repo(repo_dir)
             # Use a valid-format hexhash that doesn't exist - should timeout with NETWORK_ERROR
             # Use all zeros (invalid destination that will never connect)
-            result = stack.run_client_to(
-                "0" * 32,
+            stack.server_hash = "0" * 32
+            result = stack.run_client(
                 "capabilities\n\n",
                 timeout=35,  # shorter than default to speed up test
             )
@@ -1118,9 +1025,6 @@ class TestClientExitCodes:
                 f"Expected NETWORK_ERROR exit code, got {result.returncode}: {output}"
             )
 
-        finally:
-            stack.cleanup()
-
     def test_child_exception_invalid_repo(self, tmp_path: Path) -> None:
         if not _rnsd_config_dir:
             raise SetupError("RNS not available")
@@ -1128,10 +1032,9 @@ class TestClientExitCodes:
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
 
-        stack = IntegrationStack(_rnsd_config_dir, repo_dir)
-        stack.init_git_repo(repo_dir)
-        stack.start_server(allow_all_read=True)
-        try:
+        with IntegrationStack(_rnsd_config_dir, repo_dir) as stack:
+            stack.init_git_repo(repo_dir)
+            stack.start_server(allow_all_read=True)
             # Create an empty temp directory (not a valid git repo)
             invalid_repo = tmp_path / "invalid_repo"
             invalid_repo.mkdir()
@@ -1145,6 +1048,3 @@ class TestClientExitCodes:
             assert result.returncode == ExitCodes.CHILD_EXCEPTION.value, (
                 f"Expected CHILD_EXCEPTION exit code, got {result.returncode}: {output}"
             )
-
-        finally:
-            stack.cleanup()

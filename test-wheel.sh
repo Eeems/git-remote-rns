@@ -19,7 +19,7 @@ git config --global init.defaultBranch trunk;
 mkdir -p /tmp/test
 cd /tmp/test;
 cp -r /src/tests .
-python -m pytest -vv tests;
+python -um pytest -vv tests;
 EOF
 )
 if [[ "$libc" == "musl" ]]; then
