@@ -280,36 +280,36 @@ class IntegrationStack:
         if identity_path:
             flags.append(f"--identity={identity_path}")
 
-        result = subprocess.run(
-            [
-                *(
-                    []
-                    if hasattr(rngit, "__compiled__")
-                    else [
-                        sys.executable,
-                        "-m",
-                        "rngit",
-                    ]
-                ),
-                "git-remote-rns",
-                *flags,
-                "origin",
-                self.server_hash,
-            ],
+        args = [
+            *(
+                []
+                if hasattr(rngit, "__compiled__")
+                else [
+                    sys.executable,
+                    "-m",
+                    "rngit",
+                ]
+            ),
+            "git-remote-rns",
+            *flags,
+            "origin",
+            self.server_hash,
+        ]
+        proc = subprocess.Popen(
+            args,
             cwd=cwd,
             env={
                 **os.environ,
                 "RNS_CONFIG_PATH": str(config_path or self.rns_config),
             },
-            input=stdin,
-            capture_output=True,
             text=True,
-            timeout=timeout,
-            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
         )
-        print(f"CLIENT STDOUT: {result.stdout}")
-        print(f"CLIENT STDERR: {result.stderr}")
-        return result
+        stdout, stderr = proc.communicate(stdin, timeout=timeout)
+        print(f"CLIENT STDOUT: {stdout}")
+        print(f"CLIENT STDERR: {stderr}")
+        return subprocess.CompletedProcess(args, proc.wait(), stdout, stderr)
 
     def get_client_identity(self) -> str:
         if self.client_hexhash:
@@ -471,9 +471,7 @@ class TestPublicAccess:
         try:
             result = stack.run_client("list\n\n")
             output = result.stdout + result.stderr
-            assert "refs/heads" in output, (
-                "Expected refs/heads in output"
-            )
+            assert "refs/heads" in output, "Expected refs/heads in output"
             assert "HEAD" in output, "Expected HEAD in output"
 
         finally:
@@ -544,9 +542,7 @@ class TestAllowRead:
         try:
             result = stack.run_client("list\n\n", cwd=client_repo)
             output = result.stdout + result.stderr
-            assert "refs/heads" in output, (
-                "Expected refs/heads in output"
-            )
+            assert "refs/heads" in output, "Expected refs/heads in output"
 
         finally:
             stack.cleanup()
@@ -620,9 +616,7 @@ class TestAllowRead:
             )
             output = result.stdout + result.stderr
             assert result.returncode != 0, "Expected non-zero return code"
-            assert "Not allowed" in output, (
-                "Expected wrong identity to be denied"
-            )
+            assert "Not allowed" in output, "Expected wrong identity to be denied"
 
         finally:
             stack.cleanup()
@@ -643,9 +637,7 @@ class TestAllowWrite:
         try:
             result = stack.run_client("list\n\n")
             output = result.stdout + result.stderr
-            assert "refs/heads" in output, (
-                "Expected refs/heads in output"
-            )
+            assert "refs/heads" in output, "Expected refs/heads in output"
 
         finally:
             stack.cleanup()
