@@ -80,6 +80,12 @@ def shared_rnsd() -> Generator[Path, Any, None]:  # pyright: ignore[reportExplic
             )
 
         if rnsd_proc.poll() is not None:
+            if remaining:
+                rnsd_proc = None
+                remaining -= 1
+                start = time.time()
+                continue
+
             stdout = (
                 rnsd_proc.stdout.read().decode() if rnsd_proc.stdout is not None else ""
             )
