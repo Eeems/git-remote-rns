@@ -305,11 +305,12 @@ class IntegrationStack:
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            stdin=subprocess.PIPE if stdin else None,
         )
         stdout, stderr = proc.communicate(stdin, timeout=timeout)
         print(f"CLIENT STDOUT: {stdout}")
         print(f"CLIENT STDERR: {stderr}")
-        return subprocess.CompletedProcess(args, proc.wait(), stdout, stderr)
+        return subprocess.CompletedProcess(args, proc.returncode, stdout, stderr)
 
     def get_client_identity(self) -> str:
         if self.client_hexhash:
