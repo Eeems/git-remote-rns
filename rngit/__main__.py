@@ -7,7 +7,7 @@ log: logging.Logger = logging.getLogger(__name__)
 
 def _exec(fn: Callable[[], int]) -> int:
     res = fn()
-    log.debug(f"Exit code: {res}")
+    log.debug("Exit code: %d", res)
     return res
 
 

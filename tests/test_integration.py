@@ -78,6 +78,7 @@ def shared_rnsd() -> Generator[Path, Any, None]:  # pyright: ignore[reportExplic
                 ],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
+                start_new_session=True,
             )
 
         if rnsd_proc.poll() is not None:
@@ -309,23 +310,23 @@ class IntegrationStack:
             "origin",
             self.server_hash,
         ]
-        proc = subprocess.Popen(
+        proc = subprocess.run(
             args,
             cwd=cwd,
             env={
                 **os.environ,
                 "RNS_CONFIG_PATH": str(config_path or self.rns_config),
             },
+            input=stdin,
             text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            stdin=subprocess.PIPE if stdin else None,
+            capture_output=True,
             start_new_session=True,
+            timeout=timeout,
+            check=False,
         )
-        stdout, stderr = proc.communicate(stdin, timeout=timeout)
-        print(f"CLIENT STDOUT: {stdout}")
-        print(f"CLIENT STDERR: {stderr}")
-        return subprocess.CompletedProcess(args, proc.returncode, stdout, stderr)
+        print(f"CLIENT STDOUT: {proc.stdout}")
+        print(f"CLIENT STDERR: {proc.stderr}")
+        return proc
 
     def get_client_identity(self) -> str:
         if self.client_hexhash:
