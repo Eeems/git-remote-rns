@@ -681,7 +681,7 @@ class TestAllowWrite:
         try:
             result = stack.run_client("list for-push\n\n")
             output = result.stdout + result.stderr
-            assert result.returncode != 0, "Expected non-zero returncode"
+            assert result.returncode == 0, "list for-push failed"
             assert "Not allowed" not in output, (
                 "Expected list-for-push to work with write access"
             )
