@@ -301,6 +301,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         log.exception("Unexpected error")
         return ExitCodes.EXCEPTION.value
 
+    finally:
+        stdout.detach()
+        stderr.detach()
+
     return ExitCodes.SUCCESS.value
 
 
