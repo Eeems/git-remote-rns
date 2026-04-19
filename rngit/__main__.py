@@ -1,12 +1,13 @@
 import sys
+import logging
 from collections.abc import Callable
 from typing import NoReturn
 
+log: logging.Logger = logging.getLogger(__name__)
+
 def _exec(fn: Callable[[], int]) -> NoReturn:
     res = fn()
-    if "--verbose" in sys.argv:
-        print(f"Exit code: {res}", file=sys.stderr)
-
+    log.debug(f"Exit code: {res}")
     sys.exit(res)
 
 def client() -> NoReturn:
