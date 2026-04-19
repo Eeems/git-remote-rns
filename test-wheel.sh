@@ -28,30 +28,38 @@ if [[ "$libc" == "musl" ]]; then
 else
   image="python:${python}"
 fi
+install_rust() {
+  if [[ "$libc" == "musl" ]]; then
+    script="apk add --no-cache gcc musl-dev python3-dev libffi-dev openssl-dev cargo pkgconfig;$script"
+  elif [[ "$libc" == "glibc" ]]; then
+    script="apt-get update;DEBIAN_FRONTEND=\"noninteractive\" apt-get install -y rustc cargo;$script"
+  else
+    echo "ERROR: Unknown libc for i686"
+    exit 1
+  fi
+}
 case "$arch" in
 i686)
-  echo "WARNING: Unable to test i686 as there is no suitable python image. Skipping without error for now."
-  exit 0
+  install_rust
+  platform="linux/386"
   ;;
 s390x)
-  echo "WARNING: Unable to test s390x as not all dependencies have wheels for it. Skipping without error for now."
-  exit 0
+  install_rust
+  platform="linux/${arch}"
   ;;
 riscv64)
-  echo "WARNING: Unable to test riscv64 as not all dependencies have wheels for it. Skipping without error for now."
-  exit 0
+  install_rust
+  platform="linux/${arch}"
   ;;
 ppc64le)
   if [[ "$libc" == "musl" ]]; then
-    echo "WARNING: Unable to test ppc64le on musl as not all dependencies have wheels for it. Skipping without error for now."
-    exit 0
+    install_rust
   fi
   platform="linux/${arch}"
   ;;
 armv7l)
   if [[ "$libc" == "musl" ]]; then
-    echo "WARNING: Unable to test armv7l on musl as not all dependencies have wheels for it. Skipping without error for now."
-    exit 0
+    install_rust
   fi
   platform="linux/arm/v7"
   ;;
