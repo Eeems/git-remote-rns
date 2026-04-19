@@ -277,6 +277,24 @@ class IntegrationStack:
         timeout: int = 30,
     ) -> subprocess.CompletedProcess[str]:
         assert self.server_hash is not None
+        return self.run_client_to(
+            self.server_hash,
+            stdin,
+            cwd=cwd,
+            identity_path=identity_path,
+            config_path=config_path,
+            timeout=timeout,
+        )
+
+    def run_client_to(
+        self,
+        destination: str,
+        stdin: str,
+        cwd: Path | str | None = None,
+        identity_path: Path | None = None,
+        config_path: Path | None = None,
+        timeout: int = 30,
+    ) -> subprocess.CompletedProcess[str]:
         flags: list[str] = ["--verbose"]
         if identity_path:
             flags.append(f"--identity={identity_path}")
@@ -294,7 +312,7 @@ class IntegrationStack:
             "git-remote-rns",
             *flags,
             "origin",
-            self.server_hash,
+            destination,
         ]
         proc = subprocess.Popen(
             args,
@@ -1024,5 +1042,109 @@ class TestNoAuth:
             assert result.returncode == ExitCodes.REMOTE_ERROR.value, (
                 "Expected REMOTE_ERROR exit code"
             )
+        finally:
+            stack.cleanup()
+
+
+class TestClientExitCodes:
+    def test_bad_argument_invalid_hexhash(self, tmp_path: Path) -> None:
+        if not _rnsd_config_dir:
+            raise SetupError("RNS not available")
+
+        repo_dir = tmp_path / "repo"
+        repo_dir.mkdir()
+
+        stack = IntegrationStack(_rnsd_config_dir, repo_dir)
+        stack.init_git_repo(repo_dir)
+        stack.start_server(allow_all_read=True)
+        try:
+            # Test with invalid hex characters - should fail with BAD_ARGUMENT
+            result = stack.run_client_to("NOTAHEXHASH!!!!", "capabilities\n\n")
+            output = result.stdout + result.stderr
+            assert result.returncode == ExitCodes.BAD_ARGUMENT.value, (
+                f"Expected BAD_ARGUMENT exit code, got {result.returncode}: {output}"
+            )
+            assert "Invalid URL" in output or "invalid" in output.lower(), (
+                f"Expected invalid URL error in output: {output}"
+            )
+
+        finally:
+            stack.cleanup()
+
+    def test_unknown_command(self, tmp_path: Path) -> None:
+        if not _rnsd_config_dir:
+            raise SetupError("RNS not available")
+
+        repo_dir = tmp_path / "repo"
+        repo_dir.mkdir()
+
+        stack = IntegrationStack(_rnsd_config_dir, repo_dir)
+        stack.init_git_repo(repo_dir)
+        stack.start_server(allow_all_read=True)
+        try:
+            # Send unknown git command - should fail with UNKNOWN_COMMAND
+            result = stack.run_client("boguscommand\n\n")
+            output = result.stdout + result.stderr
+            assert result.returncode == ExitCodes.UNKNOWN_COMMAND.value, (
+                f"Expected UNKNOWN_COMMAND exit code, got {result.returncode}: {output}"
+            )
+            assert "Unknown command" in output, (
+                f"Expected unknown command error in output: {output}"
+            )
+
+        finally:
+            stack.cleanup()
+
+    def test_network_error_unreachable(self, tmp_path: Path) -> None:
+        if not _rnsd_config_dir:
+            raise SetupError("RNS not available")
+
+        repo_dir = tmp_path / "repo"
+        repo_dir.mkdir()
+
+        stack = IntegrationStack(_rnsd_config_dir, repo_dir)
+        stack.init_git_repo(repo_dir)
+        stack.start_server(allow_all_read=True)
+        try:
+            # Use a valid-format hexhash that doesn't exist - should timeout with NETWORK_ERROR
+            # Use all zeros (invalid destination that will never connect)
+            result = stack.run_client_to(
+                "0" * 32,
+                "capabilities\n\n",
+                timeout=35,  # shorter than default to speed up test
+            )
+            output = result.stdout + result.stderr
+            assert result.returncode == ExitCodes.NETWORK_ERROR.value, (
+                f"Expected NETWORK_ERROR exit code, got {result.returncode}: {output}"
+            )
+
+        finally:
+            stack.cleanup()
+
+    def test_child_exception_invalid_repo(self, tmp_path: Path) -> None:
+        if not _rnsd_config_dir:
+            raise SetupError("RNS not available")
+
+        repo_dir = tmp_path / "repo"
+        repo_dir.mkdir()
+
+        stack = IntegrationStack(_rnsd_config_dir, repo_dir)
+        stack.init_git_repo(repo_dir)
+        stack.start_server(allow_all_read=True)
+        try:
+            # Create an empty temp directory (not a valid git repo)
+            invalid_repo = tmp_path / "invalid_repo"
+            invalid_repo.mkdir()
+
+            # Try to fetch into an invalid git repository - should fail with CHILD_EXCEPTION
+            result = stack.run_client(
+                "fetch HEAD refs/heads/main\n\n",
+                cwd=invalid_repo,
+            )
+            output = result.stdout + result.stderr
+            assert result.returncode == ExitCodes.CHILD_EXCEPTION.value, (
+                f"Expected CHILD_EXCEPTION exit code, got {result.returncode}: {output}"
+            )
+
         finally:
             stack.cleanup()
