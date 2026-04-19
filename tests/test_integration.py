@@ -451,6 +451,7 @@ class TestPublicAccess:
         try:
             result = stack.run_client("capabilities\n\n")
             output = result.stdout + result.stderr
+            assert result.returncode == 0, "capabilities failed"
             assert "list" in output, f"'list' missing from capabilities: {output}"
             assert "fetch" in output, f"'fetch' missing from capabilities: {output}"
             assert "push" in output, f"'push' missing from capabilities: {output}"
@@ -471,6 +472,7 @@ class TestPublicAccess:
         try:
             result = stack.run_client("list\n\n")
             output = result.stdout + result.stderr
+            assert result.returncode == 0, "list failed"
             assert "refs/heads" in output, "Expected refs/heads in output"
             assert "HEAD" in output, "Expected HEAD in output"
 
@@ -542,6 +544,7 @@ class TestAllowRead:
         try:
             result = stack.run_client("list\n\n", cwd=client_repo)
             output = result.stdout + result.stderr
+            assert result.returncode == 0, "list failed"
             assert "refs/heads" in output, "Expected refs/heads in output"
 
         finally:
@@ -637,6 +640,7 @@ class TestAllowWrite:
         try:
             result = stack.run_client("list\n\n")
             output = result.stdout + result.stderr
+            assert result.returncode == 0, "list failed"
             assert "refs/heads" in output, "Expected refs/heads in output"
 
         finally:
@@ -676,6 +680,7 @@ class TestAllowWrite:
         try:
             result = stack.run_client("list for-push\n\n")
             output = result.stdout + result.stderr
+            assert result.returncode != 0, "Expected non-zero returncode"
             assert "Not allowed" not in output, (
                 "Expected list-for-push to work with write access"
             )
