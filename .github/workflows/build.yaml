@@ -216,6 +216,8 @@ jobs:
         with:
           packages-dir: ${{ steps.download.outputs.download-path }}
           skip-existing: true
+          print-hash: false
+          verbose: ${{ runner.debug }}
   release:
     name: Add ${{ matrix.artifact }} to release
     if: github.repository == 'Eeems/git-remote-rns' && github.event_name == 'release' && startsWith(github.ref, 'refs/tags')
