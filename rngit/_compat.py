@@ -1,20 +1,10 @@
 # pyright: reportUnnecessaryTypeIgnoreComment=none
-from collections.abc import Callable
-from typing import (
-    Any,
-    cast,
-)
+import sys
 
-try:
-    # Added in python 3.12
-    from typing import (
-        override,  # pyright: ignore[reportUnknownVariableType,reportAttributeAccessIssue,reportUnknownType,reportUnnecessaryTypeIgnoreComment]
-    )
+if sys.version_info < (3, 12):
+    from typing_extensions import override  # pyright: ignore[reportUnreachable]
 
-except ImportError:
-    from overrides import (  # pyright: ignore[reportMissingImports,reportUnnecessaryTypeIgnoreComment]
-        override,  # pyright: ignore[reportUnknownVariableType,reportUnnecessaryTypeIgnoreComment]
-    )
+else:
+    from typing import override  # pyright: ignore[reportUnreachable]
 
-override = cast(Callable[[Callable[..., Any]], Callable[..., Any]], override)  # pyright: ignore[reportExplicitAny]
 __all__ = ["override"]

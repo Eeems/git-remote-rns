@@ -96,6 +96,23 @@ def start_rnsd(config_dir: str) -> subprocess.Popen[bytes]:
     last_rnstatus_output = ""
     while True:
         if rnsd_proc.poll() is not None:
+            if remaining:
+                rnsd_proc = subprocess.Popen(
+                    [
+                        sys.executable,
+                        "-m",
+                        "RNS.Utilities.rnsd",
+                        "--config",
+                        config_dir,
+                        "-vvv",
+                    ],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                )
+                remaining -= 1
+                start = time.time()
+                continue
+
             stdout = rnsd_proc.stdout.read().decode() if rnsd_proc.stdout else ""
             raise RuntimeError(
                 f"rnsd exited early: {rnsd_proc.returncode}\n  stdout: {stdout}"

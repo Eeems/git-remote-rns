@@ -1,7 +1,7 @@
 SHELL := bash
 
 VERSION := $(shell grep -m 1 version pyproject.toml | tr -s ' ' | tr -d '"' | tr -d "'" | cut -d' ' -f3)
-PACKAGE := $(shell grep -m 1 name pyproject.toml | tr -s ' ' | tr -d '"' | tr -d "'" | cut -d' ' -f3)
+PACKAGE := $(shell grep -m 1 name pyproject.toml | tr -s ' ' | tr -d '"' | tr -d "'" | cut -d' ' -f3 | tr '-' '_')
 
 OBJ := $(shell find rngit -type f)
 OBJ += pyproject.toml
@@ -239,22 +239,29 @@ dist:
 	mkdir -p dist
 
 .PHONY: wheel
-wheel: dist/git_remote_rns-${VERSION}-${ABI}-${ABI}-${PLATFORM}.whl # Build wheel
+wheel: dist/${PACKAGE}-${VERSION}-py3-none-any.whl ## Build wheel
+
+.PHONY: native-wheel
+native-wheel: dist/${PACKAGE}-${VERSION}-${ABI}-${ABI}-${PLATFORM}.whl ## Build native wheel
 
 .PHONY: sdist
-sdist: dist/git_remote_rns-${VERSION}.tar.gz # Build sdist
+sdist: dist/${PACKAGE}-${VERSION}.tar.gz ## Build sdist
 
-dist/git_remote_rns-${VERSION}-${ABI}-${ABI}-${PLATFORM}.whl: $(VENV_BIN_ACTIVATE) dist $(OBJ)
+dist/${PACKAGE}-${VERSION}-${ABI}-${ABI}-${PLATFORM}.whl: $(VENV_BIN_ACTIVATE) dist $(OBJ)
 	@. ${VENV_BIN_ACTIVATE}; \
 	python -m build --wheel
 
-dist/git_remote_rns-${VERSION}.tar.gz: $(VENV_BIN_ACTIVATE) dist $(OBJ)
+dist/${PACKAGE}-${VERSION}-py3-none-any.whl: ${VENV_BIN_ACTIVATE} dist $(OBJ)
+	@. ${VENV_BIN_ACTIVATE}; \
+	python -m build --wheel --config-setting=build_with_nuitka=false
+
+dist/${PACKAGE}-${VERSION}.tar.gz: $(VENV_BIN_ACTIVATE) dist $(OBJ)
 	@. ${VENV_BIN_ACTIVATE}; \
 	python -m build --sdist
 
 .PHONY: clean
 clean: ## Remove build artifacts
-	rm -rf build/ dist/ *.egg-info/ .venv/
+	rm -rf build/ dist/ *.egg-info/ .venv/ wheelhouse/
 	rm -rf *.build *.dist
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 	find . -type f -name "*.pyc" -delete 2>/dev/null || true

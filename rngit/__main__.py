@@ -1,23 +1,32 @@
+import logging
 import sys
-from typing import NoReturn
+from collections.abc import Callable
+
+log: logging.Logger = logging.getLogger(__name__)
 
 
-def client() -> NoReturn:
+def _exec(fn: Callable[[], int]) -> int:
+    res = fn()
+    log.debug("Exit code: %d", res)
+    return res
+
+
+def client() -> int:
     from .client import main as _client  # noqa: PLC0415
 
-    sys.exit(_client())
+    return _exec(_client)
 
 
-def server() -> NoReturn:
+def server() -> int:
     from .server import main as _server  # noqa: PLC0415
 
-    sys.exit(_server())
+    return _exec(_server)
 
 
-def web() -> NoReturn:
+def web() -> int:
     from .web import main as _web  # noqa: PLC0415
 
-    sys.exit(_web())
+    return _exec(_web)
 
 
 __all__ = ["client", "server", "web"]
@@ -26,13 +35,15 @@ if __name__ == "__main__":
     executable = sys.argv.pop(1)
     match executable:
         case "rngit":
-            server()
+            res = server()
 
         case "git-remote-rns":
-            client()
+            res = client()
 
         case "rngit-web":
-            web()
+            res = web()
 
         case _:
             raise NotImplementedError(executable)
+
+    sys.exit(res)

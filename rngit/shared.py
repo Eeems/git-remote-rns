@@ -8,10 +8,14 @@ import sys
 from enum import Enum
 from typing import (
     IO,
+    TYPE_CHECKING,
     cast,
 )
 
 import RNS
+
+if TYPE_CHECKING:
+    from _typeshed import ReadableBuffer
 
 from ._compat import override
 
@@ -108,7 +112,10 @@ class BytesIOWrapper(io.BufferedWriter):
         self.errors: str = errors or getattr(buffer, "errors", None) or "strict"
 
     @override
-    def write(self, buffer: bytes) -> int:
+    def write(self, buffer: "ReadableBuffer") -> int:
+        if not isinstance(buffer, bytes):
+            buffer = bytes(buffer)
+
         text = buffer.decode(self.encoding, self.errors)
         chars_written = cast(IO[str], cast(object, self.raw)).write(text)
         if chars_written < len(text):
