@@ -48,6 +48,10 @@ s390x)
   platform="linux/${arch}"
   ;;
 riscv64)
+  if [[ "$python" == "3.11" ]] && [[ "$libc" == "glibc" ]]; then
+    echo "WARNING: python image does not support cp311-manylinux_2_39_riscv64, exiting without error"
+    exit 0
+  fi
   install_rust
   platform="linux/${arch}"
   ;;
