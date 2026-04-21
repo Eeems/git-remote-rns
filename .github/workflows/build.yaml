@@ -216,7 +216,7 @@ jobs:
         with:
           packages-dir: ${{ steps.download.outputs.download-path }}
           skip-existing: true
-          print-hash: false
+          print-hash: "false"
           verbose: ${{ runner.debug }}
   release:
     name: Add ${{ matrix.artifact }} to release
