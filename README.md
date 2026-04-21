@@ -1,3 +1,6 @@
+![pypi](https://img.shields.io/pypi/v/git-remote-rns)
+
+
 git-remote-rns
 ==============
 
