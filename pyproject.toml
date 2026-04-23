@@ -40,10 +40,8 @@ Repository = "https://github.com/Eeems/git-remote-rns.git"
 Issues = "https://github.com/Eeems/git-remote-rns/issues"
 
 [project.optional-dependencies]
-test = [
-    "pytest",
-    "atheris",
-]
+test = ["pytest"]
+fuzz = ["atheris"]
 
 [project.scripts]
 git-remote-rns = "rngit.__main__:client"

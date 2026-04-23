@@ -26,13 +26,13 @@ $(VENV_BIN_ACTIVATE):
 	python -m pip install --upgrade pip; \
 	python -m pip install --upgrade build wheel
 
-.PHONY: requirements-test
-requirements-test: $(VENV_BIN_ACTIVATE) pyproject.toml ## Install test requirements
+.PHONY: requirements-fuzz
+requirements-fuzz: $(VENV_BIN_ACTIVATE) pyproject.toml ## Install fuzz requirements
 	@. ${VENV_BIN_ACTIVATE}; \
 	python -m pip install \
 	  --quiet \
 	  --editable \
-	  ".[test]"
+	  ".[fuzz]"
 
 .PHONY: fuzz
 fuzz: $(FUZZERS) ## Run fuzz tests
@@ -46,7 +46,7 @@ list-fuzzers: ## List all available fuzzers
 
 define fuzz-target
 .PHONY: $1
-$1: requirements-test
+$1: requirements-fuzz
 	@. $${VENV_BIN_ACTIVATE}; \
 	cd fuzz; \
 	python $2 \
