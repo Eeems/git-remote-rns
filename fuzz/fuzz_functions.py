@@ -5,11 +5,11 @@ import tempfile
 
 import atheris
 
-with atheris.instrument_imports():
-    from rngit.client import (  # pyright: ignore[reportImplicitRelativeImport] # noqa: PLC0415
+with atheris.instrument_imports():  # pyright: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
+    from rngit.client import (  # noqa: PLC0415
         c_style_quote,
     )
-    from rngit.micron import (  # pyright: ignore[reportImplicitRelativeImport] # noqa: PLC0415
+    from rngit.micron import (  # noqa: PLC0415
         # convert_markdown,
         escape,
         escape_inline,
@@ -19,7 +19,7 @@ with atheris.instrument_imports():
         paramescape,
         paramunescape,
     )
-    from rngit.shared import (  # pyright: ignore[reportImplicitRelativeImport] # noqa: PLC0415
+    from rngit.shared import (  # noqa: PLC0415
         _normalize_repo,  # pyright: ignore[reportPrivateUsage]
         configure_logging,
         is_valid_hexhash,
@@ -30,10 +30,12 @@ corpus = os.path.join("corpus", os.path.splitext(os.path.basename(__file__))[0])
 with tempfile.TemporaryDirectory(prefix="rngit_fuzz_") as t:
 
     def TestOneInput(data: bytes) -> None:
-        text = atheris.FuzzedDataProvider(data).ConsumeUnicode(sys.maxsize)
-        text_no_surrogates = atheris.FuzzedDataProvider(
+        text = atheris.FuzzedDataProvider(data).ConsumeUnicode(sys.maxsize)  # pyright: ignore[reportUnknownMemberType, reportAttributeAccessIssue, reportUnknownVariableType]
+        assert isinstance(text, str)
+        text_no_surrogates = atheris.FuzzedDataProvider(  # pyright: ignore[reportUnknownMemberType, reportAttributeAccessIssue, reportUnknownVariableType]
             data
         ).ConsumeUnicodeNoSurrogates(sys.maxsize)
+        assert isinstance(text_no_surrogates, str)
 
         _ = c_style_quote(text)
         _ = paramunescape(text)

@@ -8,13 +8,13 @@ from subprocess import CalledProcessError
 
 import atheris
 
-with atheris.instrument_imports():
-    from rngit.app import (  # pyright: ignore[reportImplicitRelativeImport] # noqa: PLC0415
+with atheris.instrument_imports():  # pyright: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
+    from rngit.app import (  # noqa: PLC0415
         Application,
         InvalidParameterType,
         Request,
     )
-    from rngit.shared import (  # pyright: ignore[reportImplicitRelativeImport] # noqa: PLC0415
+    from rngit.shared import (  # noqa: PLC0415
         configure_logging,
         is_valid_hexhash,
     )
@@ -52,28 +52,31 @@ with tempfile.TemporaryDirectory(prefix="rngit_fuzz_") as t:
         if len(data) < MINIMUM_DATA_SIZE:
             return
 
-        fdp = atheris.FuzzedDataProvider(data)
-        request_id: bytes = fdp.ConsumeBytes(16)
+        fdp = atheris.FuzzedDataProvider(data)  # pyright: ignore[reportUnknownMemberType, reportAttributeAccessIssue, reportUnknownVariableType]
+        request_id = fdp.ConsumeBytes(16)  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+        assert isinstance(request_id, bytes)
         hexhash: str = request_id.hex()
         if not is_valid_hexhash(hexhash):
             return
 
-        path: str = fdp.ConsumeUnicodeNoSurrogates(50)
+        path = fdp.ConsumeUnicodeNoSurrogates(50)  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+        assert isinstance(path, str)
         if not path:
             return
 
-        permission = fdp.ConsumeUnicode(20)
+        permission = fdp.ConsumeUnicode(20)  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+        assert isinstance(permission, str)
         if not permission:
             return
 
-        data: dict[str, int | float | bool] = {
-            "_int": fdp.ConsumeInt(1),
-            "_float": fdp.ConsumeFloat(),
-            "_bool": fdp.ConsumeBool(),
+        data_dict: dict[str, int | float | bool] = {
+            "_int": fdp.ConsumeInt(1),  # pyright: ignore[reportUnknownMemberType]
+            "_float": fdp.ConsumeFloat(),  # pyright: ignore[reportUnknownMemberType]
+            "_bool": fdp.ConsumeBool(),  # pyright: ignore[reportUnknownMemberType]
         }
         try:
             parameters = app._get_parameters(fn)  # pyright: ignore[reportPrivateUsage]
-            request = Request(path, data, hexhash, None, 0.0)
+            request = Request(path, data_dict, hexhash, None, 0.0)
             _ = path in request
             _ = request.param(path)  # pyright: ignore[reportAny]
 
@@ -90,7 +93,7 @@ with tempfile.TemporaryDirectory(prefix="rngit_fuzz_") as t:
             app.push_cache(idx, 0.0, None)
             app.purge_cache()
             app.permit(hexhash, permission)
-            _ = app.default_handler(path, data, request_id, None, 0)
+            _ = app.default_handler(path, data_dict, request_id, None, 0)
             _ = app.exception(request, Exception(path))
             _ = app.exception(
                 request,
@@ -103,7 +106,7 @@ with tempfile.TemporaryDirectory(prefix="rngit_fuzz_") as t:
             print(f"hexhash: {hexhash}")
             print(f"path: {path.encode()}")
             print(f"permission: {permission.encode()}")
-            print(f"data: {data}")
+            print(f"data: {data_dict}")
             raise
 
     argv = [sys.argv[0], corpus, "-timeout=10", *sys.argv[1:]]

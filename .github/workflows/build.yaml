@@ -27,11 +27,11 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
           cache: "pip"
+      - &install-emake
+        name: Install emake
+        run: pip install emake
       - name: Run lint
-        run: |
-          set -e
-          pip install wheel packaging
-          make lint
+        run: emake lint
   test:
     name: Test with python ${{ matrix.python }}
     runs-on: ubuntu-latest
@@ -46,13 +46,13 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
           cache: "pip"
+      - *install-emake
       - name: Run tests
         run: |
           set -e
-          pip install wheel packaging
           git config --global user.name "Github Runner"
           git config --global init.defaultBranch trunk
-          make test
+          emake test
 
   fuzzers:
     name: Get fuzzers
@@ -101,30 +101,45 @@ jobs:
           pip install wheel packaging
           make ${{ matrix.fuzzer }}
 
-  build-any-wheel:
-    name: Build wheel
+  build-sdist:
+    name: Build sdist
+    needs: &build-needs
+      - lint
+      - test
     runs-on: ubuntu-latest
-    needs: [ test, lint ]
     steps:
       - name: Checkout the Git repository
         uses: actions/checkout@v6
-      - name: Setup Python
-        uses: actions/setup-python@v6
+      - *install-emake
+      - name: Building sdist
+        run: emake build --sdist
+      - uses: actions/upload-artifact@v6
         with:
-          python-version: "3.11"
-          cache: "pip"
-      - name: Install build tool
-        run: pip install build
-      - name: Building package
-        run: make wheel
+          name: pip-sdist
+          path: dist/*
+          if-no-files-found: error
+
+  build-any-wheel:
+    name: Build wheel
+    runs-on: ubuntu-latest
+    needs: *build-needs
+    steps:
+      - name: Checkout the Git repository
+        uses: actions/checkout@v6
+      - *install-emake
+      - name: Building wheel
+        run: emake build --wheel
+      - name: Test wheel
+        run: emake test --wheel
       - uses: actions/upload-artifact@v6
         with:
           name: pip-wheel-none-any
           path: dist/*
           if-no-files-found: error
+
   build-wheel:
     name: Build wheel
-    needs: [ lint, test ]
+    needs: *build-needs
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -148,47 +163,27 @@ jobs:
     steps:
       - name: Checkout the Git repository
         uses: actions/checkout@v6
+      - *install-emake
       - name: Building wheel
-        run: ./wheel.sh
-        env:
-          python: ${{ matrix.python }}
-          arch: ${{ matrix.arch }}
-          libc: ${{ matrix.libc }}
+        run: |
+          emake build \
+            --native-wheel \
+            --arch ${{ matrix.arch }} \
+            --libc ${{ matrix.libc }} \
+            --python ${{ matrix.python }}
       - name: Testing wheel
-        run: ./test-wheel.sh
-        env:
-          python: ${{ matrix.python }}
-          arch: ${{ matrix.arch }}
-          libc: ${{ matrix.libc }}
+        run: |
+          emake test \
+            --wheel \
+            --arch ${{ matrix.arch }} \
+            --libc ${{ matrix.libc }} \
+            --python ${{ matrix.python }}
       - uses: actions/upload-artifact@v6
         with:
           name: pip-wheel-${{ matrix.python }}-${{ matrix.arch }}-${{ matrix.libc }}
-          path: wheelhouse/*
-          if-no-files-found: error
-  build-sdist:
-    name: Build sdist
-    needs: [ lint, test ]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout the Git repository
-        uses: actions/checkout@v6
-      - name: Setup Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.11"
-          cache: "pip"
-      - name: Install build tool
-        run: pip install build
-      - name: Building sdist
-        run: |
-          set -e
-          pip install wheel packaging
-          make sdist
-      - uses: actions/upload-artifact@v6
-        with:
-          name: pip-sdist
           path: dist/*
           if-no-files-found: error
+
   publish:
     name: Publish to PyPi
     if: github.repository == 'Eeems/git-remote-rns' && github.event_name == 'release' && startsWith(github.ref, 'refs/tags')

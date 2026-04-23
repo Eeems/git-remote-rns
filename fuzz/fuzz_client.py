@@ -19,11 +19,11 @@ from typing import cast
 import atheris
 import RNS
 
-with atheris.instrument_imports():
-    from rngit import (  # pyright: ignore[reportImplicitRelativeImport] # noqa: PLC0415
+with atheris.instrument_imports():  # pyright: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
+    from rngit import (  # noqa: PLC0415
         client,
     )
-    from rngit.shared import (  # pyright: ignore[reportImplicitRelativeImport] # noqa: PLC0415
+    from rngit.shared import (  # noqa: PLC0415
         BytesIOWrapper,
         ExitCodes,
         configure_logging,
@@ -352,9 +352,9 @@ with tempfile.TemporaryDirectory() as temp_dir:
 
         destination = bytes.fromhex(server_hash)
 
-        class FuzzedDataProvider(atheris.FuzzedDataProvider):
+        class FuzzedDataProvider(atheris.FuzzedDataProvider):  # pyright: ignore[reportUnknownMemberType, reportAttributeAccessIssue, reportUntypedBaseClass]
             def ConsumeRef(self) -> str:
-                data = self.ConsumeUnicodeNoSurrogates(30)
+                data = self.ConsumeUnicodeNoSurrogates(30)  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
                 assert isinstance(data, str)
                 return (
                     data.replace("\0", "?")
@@ -367,7 +367,7 @@ with tempfile.TemporaryDirectory() as temp_dir:
                 )
 
             def ConsumeHex(self, size: int) -> str:
-                data = self.ConsumeBytes(size)
+                data = self.ConsumeBytes(size)  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
                 assert isinstance(data, bytes)
                 return data.hex()
 
@@ -377,7 +377,7 @@ with tempfile.TemporaryDirectory() as temp_dir:
 
             fdp = FuzzedDataProvider(data)
 
-            cmd_type = fdp.ConsumeIntInRange(0, 6)
+            cmd_type = fdp.ConsumeIntInRange(0, 6)  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
             command: str = cast(
                 str,
                 [

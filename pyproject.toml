@@ -29,6 +29,8 @@ keywords = [
 dependencies = [
     "rns>=1.1.4",
     "lxmf>=0.9.4",
+    "humanize>=4.15.0",
+    "marko>=2.2.2",
     "typing-extensions==4.15.0; python_version<\"3.12\"",
 ]
 
@@ -40,21 +42,7 @@ Issues = "https://github.com/Eeems/git-remote-rns/issues"
 [project.optional-dependencies]
 test = [
     "pytest",
-]
-fuzz = [
     "atheris",
-]
-
-dev = [
-    'basedpyright',
-    "dodgy",
-    "pyroma",
-    "ruff",
-    "vulture",
-]
-web = [
-    "humanize>=4.15.0",
-    "marko>=2.2.2",
 ]
 
 [project.scripts]
@@ -73,7 +61,7 @@ readme = {file= ["README.md"], content-type = "text/markdown"}
 packages = ["rngit"]
 
 [tool.ruff]
-exclude = [".venv", "build", "**/__whitelist.py"]
+exclude = [".venv", "build"]
 
 [tool.ruff.lint]
 extend-select = [
@@ -98,19 +86,6 @@ ignore = [
 ]
 
 [tool.pyright]
-exclude = [".venv", "build", "**/__whitelist.py"]
+exclude = [".venv", "build"]
 reportMissingTypeStubs = false
 
-[tool.vulture]
-ignore_names = ["__*", "_*", "_"]
-ignore_decorators = [
-    "@app.request",
-    "@app.page",
-    "@app.file",
-    '@pytest.fixture',
-]
-exclude = [
-    ".venv/",
-    "build/",
-    ".repos/",
-]
