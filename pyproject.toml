@@ -49,7 +49,7 @@ rngit = "rngit.__main__:server"
 rngit-web = "rngit.__main__:web"
 
 [build-system]
-requires = ["setuptools>=70.1", "nuitka>=4.0.6"]
+requires = ["setuptools>=77.0", "nuitka>=4.0.6"]
 build-backend = "nuitka.distutils.Build"
 
 [tool.setuptools.dynamic]
