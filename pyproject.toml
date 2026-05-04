@@ -1,12 +1,12 @@
 [project]
 name = "git-remote-rns"
-version = "0.2.4"
+version = "0.2.5"
 description = "Git remote helper for syncing repositories over Reticulum"
 requires-python = ">=3.11"
 license = "MIT"
 authors = [{name = "Eeems", email="eeems@eeems.email"}]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 7 - Inactive",
     "Environment :: Console",
     "Intended Audience :: Developers",
     "Operating System :: POSIX :: Linux",

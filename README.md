@@ -1,3 +1,5 @@
+> As of `RNS` 1.2.1, all features this repository provides have been implemented in the main reticulum project using the same names as the cli tools this project provides. The `RNS` utilities are not compatible with this project, and as they are now the defacto standard due to being installed by default for anybody using `RNS`, I'm choosing to archive this project.
+
 ![pypi](https://img.shields.io/pypi/v/git-remote-rns)
 
 
